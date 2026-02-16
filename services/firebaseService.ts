@@ -59,6 +59,32 @@ const decodeJwt = (token: string) => {
   }
 };
 
+/**
+ * Garante que o usuário existe no Firestore. 
+ * Se não existir, cria o registro com isAdmin: false.
+ */
+const syncUserToDb = async (userData: any) => {
+  if (isMockMode || !db) return;
+
+  try {
+    const userRef = doc(db, USERS_COL, userData.email);
+    const snap = await getDoc(userRef);
+
+    if (!snap.exists()) {
+      await setDoc(userRef, {
+        uid: userData.uid,
+        name: userData.name,
+        email: userData.email,
+        isAdmin: false, // Regra solicitada: padrão false para novos usuários
+        createdAt: new Date().toISOString()
+      });
+      console.log("Novo usuário registrado no Firestore.");
+    }
+  } catch (error) {
+    console.error("Erro ao sincronizar usuário no Firestore:", error);
+  }
+};
+
 export const loginWithGoogle = async (): Promise<any | null> => {
   if (isMockMode) {
     const mockUser = { 
@@ -85,6 +111,10 @@ export const loginWithGoogle = async (): Promise<any | null> => {
               email: payload.email,
               photoURL: payload.picture
             };
+
+            // Antes de resolver, garante o cadastro no Firestore
+            await syncUserToDb(userData);
+
             localStorage.setItem("g_user", JSON.stringify(userData));
             window.dispatchEvent(new Event('auth_change'));
             resolve(userData);
@@ -122,7 +152,6 @@ export const checkAdminStatus = async (email: string): Promise<boolean> => {
   if (!db) return false;
   
   try {
-    // Buscamos o usuário pelo email na coleção users
     const snap = await getDoc(doc(db, USERS_COL, email));
     if (snap.exists()) {
       return snap.data().isAdmin === true;
