@@ -73,14 +73,15 @@ export default function App() {
     paymentMethod: 'Pix' as 'Pix' | 'Cartão' | 'Dinheiro'
   });
 
-  const isMock = !process.env.FIREBASE_CONFIG || process.env.FIREBASE_CONFIG === '{}' || !JSON.parse(process.env.FIREBASE_CONFIG).apiKey;
+  const isMock = !process.env.FIREBASE_CONFIG || process.env.FIREBASE_CONFIG === '{}';
 
-  // Gerenciamento de Autenticação
+  // Gerenciamento de Autenticação (GCP Puro + Firestore)
   useEffect(() => {
     const unsubAuth = subscribeAuth(async (user) => {
       if (user) {
         setCurrentUser(user);
-        const admin = await checkAdminStatus(user.uid);
+        // Usamos o email como chave de consulta de Admin no Firestore
+        const admin = await checkAdminStatus(user.email);
         setIsAdmin(admin);
       } else {
         setCurrentUser(null);
@@ -92,7 +93,7 @@ export default function App() {
     return () => unsubAuth();
   }, []);
 
-  // Dados do Cardápio (Público)
+  // Dados do Cardápio
   useEffect(() => {
     const unsubProducts = subscribeProducts(setProducts);
     const unsubSettings = subscribeSettings((s) => {
@@ -125,7 +126,7 @@ export default function App() {
       await loginWithGoogle();
     } catch (e) {
       console.error(e);
-      alert("Falha no login. Verifique as configurações do Google Console.");
+      alert("Erro ao realizar login via Google.");
     } finally {
       setIsLoggingIn(false);
     }
@@ -142,7 +143,7 @@ export default function App() {
 
   const handleCheckout = () => {
     const itemsList = cart.map(item => `${item.quantity}x ${item.product.name}${item.observations ? ` (Obs: ${item.observations})` : ''}`).join('\n');
-    const message = encodeURIComponent(`*NOVO PEDIDO*\n\n👤 Cliente: ${customerInfo.name}\n📍 Endereço: ${customerInfo.address}\n💳 Pagamento: ${customerInfo.paymentMethod}\n\n🍱 Itens:\n${itemsList}\n\n💰 Total: R$ ${cartTotal.toFixed(2)}`);
+    const message = encodeURIComponent(`*NOVO PEDIDO - ${settings.name}*\n\n👤 Cliente: ${customerInfo.name}\n📍 Endereço: ${customerInfo.address}\n💳 Pagamento: ${customerInfo.paymentMethod}\n\n🍱 Itens:\n${itemsList}\n\n💰 Total: R$ ${cartTotal.toFixed(2)}`);
     window.open(`https://wa.me/${ADMIN_PHONE}?text=${message}`, '_blank');
     setCart([]); setCheckoutStep(0); setIsCartOpen(false);
   };
@@ -182,10 +183,12 @@ export default function App() {
             )}
 
             {currentUser ? (
-              <button onClick={() => confirm("Sair?") && logout()} className="flex items-center gap-2">
+              <div className="flex items-center gap-2">
                 <img src={currentUser.photoURL} className="w-8 h-8 rounded-full border border-gray-100" />
-                <LogOut size={16} className="text-gray-400" />
-              </button>
+                <button onClick={() => confirm("Deseja sair?") && logout()} className="text-gray-400 hover:text-red-500">
+                  <LogOut size={16} />
+                </button>
+              </div>
             ) : (
               <button 
                 onClick={handleLogin}
@@ -247,7 +250,6 @@ export default function App() {
         )}
       </main>
 
-      {/* Mini Carrinho e Modais iguais à versão anterior */}
       {cartItemCount > 0 && shopStatus.open && viewMode === ViewMode.CUSTOMER && (
         <div className="fixed bottom-0 inset-x-0 p-4 bg-white/80 backdrop-blur-md border-t border-gray-100 z-50">
           <div className="max-w-4xl mx-auto">
@@ -259,7 +261,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Modal Carrinho simplificado conforme pedido de fluxo similar */}
       {isCartOpen && (
         <div className="fixed inset-0 z-[100] flex justify-end">
           <div className="absolute inset-0 bg-black/40" onClick={() => setIsCartOpen(false)} />
@@ -318,8 +319,99 @@ export default function App() {
   );
 }
 
-// O componente AdminDashboard permanece com a mesma estrutura de edição
+// Painel administrativo funcional
 function AdminDashboard({ products, settings, isAdmin }: { products: Product[], settings: BusinessSettings, isAdmin: boolean }) {
-  if (!isAdmin) return <div className="p-20 text-center"><ShieldAlert className="mx-auto mb-4 text-red-500" /><h2 className="font-bold">Acesso Negado</h2></div>;
-  return <div className="py-10 text-center text-gray-400">Painel Administrativo em Construção... (Funcionalidades de CRUD de produto e configurações de loja aqui)</div>;
+  const [activeTab, setActiveTab] = useState<'menu' | 'settings'>('menu');
+  const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null);
+  const [tempSettings, setTempSettings] = useState<BusinessSettings>(settings);
+  const [saving, setSaving] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleSaveProduct = async () => {
+    if (!editingProduct) return;
+    setSaving(true);
+    await saveProductToDb({
+      id: editingProduct.id || Math.random().toString(36).substr(2, 9),
+      name: editingProduct.name || 'Sem nome',
+      description: editingProduct.description || '',
+      price: editingProduct.price || 0,
+      category: editingProduct.category || settings.categories[0],
+      image: editingProduct.image || 'https://via.placeholder.com/400',
+      available: true
+    });
+    setSaving(false);
+    setEditingProduct(null);
+  };
+
+  if (!isAdmin) return <div className="p-20 text-center"><ShieldAlert className="mx-auto mb-4 text-red-500" /><h2 className="font-bold text-gray-900">Acesso Restrito</h2></div>;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex bg-white p-1 rounded-xl border border-gray-100">
+        <button onClick={() => setActiveTab('menu')} className={`flex-1 py-2 rounded-lg text-xs font-bold ${activeTab === 'menu' ? 'bg-orange-500 text-white' : 'text-gray-400'}`}>Produtos</button>
+        <button onClick={() => setActiveTab('settings')} className={`flex-1 py-2 rounded-lg text-xs font-bold ${activeTab === 'settings' ? 'bg-orange-500 text-white' : 'text-gray-400'}`}>Configurações</button>
+      </div>
+
+      {activeTab === 'menu' ? (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h2 className="font-bold text-gray-900">Cardápio</h2>
+            <button onClick={() => setEditingProduct({})} className="bg-orange-500 text-white px-4 py-2 rounded-lg text-xs font-bold">+ Novo</button>
+          </div>
+          <div className="grid gap-3">
+            {products.map(p => (
+              <div key={p.id} className="bg-white p-4 rounded-xl flex items-center justify-between border border-gray-100">
+                <div className="flex items-center gap-3">
+                  <img src={p.image} className="w-10 h-10 rounded-lg object-cover" />
+                  <div>
+                    <p className="font-bold text-sm text-gray-900">{p.name}</p>
+                    <p className="text-[10px] text-gray-400 uppercase font-bold">{p.category}</p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => setEditingProduct(p)} className="p-2 text-gray-400 hover:text-orange-500"><Edit2 size={16}/></button>
+                  <button onClick={() => confirm("Remover?") && deleteProductFromDb(p.id)} className="p-2 text-gray-400 hover:text-red-500"><Trash2 size={16}/></button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="bg-white p-6 rounded-2xl border border-gray-100 space-y-6">
+          <h2 className="font-bold text-gray-900">Loja</h2>
+          <div className="space-y-4">
+             <label className="block space-y-1">
+               <span className="text-[10px] font-bold text-gray-400 uppercase">Nome Comercial</span>
+               <input className="w-full p-4 bg-gray-50 rounded-xl text-sm" value={tempSettings.name} onChange={e => setTempSettings({...tempSettings, name: e.target.value})} />
+             </label>
+             <button onClick={() => setTempSettings({...tempSettings, manualClosed: !tempSettings.manualClosed})} className={`w-full py-4 rounded-xl font-bold text-xs ${tempSettings.manualClosed ? 'bg-red-500 text-white' : 'bg-emerald-500 text-white'}`}>
+               {tempSettings.manualClosed ? 'LOJA FECHADA MANUALMENTE' : 'LOJA ABERTA'}
+             </button>
+             <button onClick={async () => { setSaving(true); await saveSettings(tempSettings); setSaving(false); alert("Salvo!"); }} className="w-full py-4 bg-gray-900 text-white rounded-xl font-bold text-xs">SALVAR CONFIGURAÇÕES</button>
+          </div>
+        </div>
+      )}
+
+      {editingProduct && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-lg p-8 rounded-3xl space-y-6">
+             <h3 className="font-bold text-lg">{editingProduct.id ? 'Editar' : 'Novo'} Produto</h3>
+             <div className="space-y-4">
+                <input className="w-full p-4 bg-gray-50 rounded-xl text-sm" placeholder="Nome" value={editingProduct.name || ''} onChange={e => setEditingProduct({...editingProduct, name: e.target.value})} />
+                <input className="w-full p-4 bg-gray-50 rounded-xl text-sm" placeholder="Preço" type="number" value={editingProduct.price || 0} onChange={e => setEditingProduct({...editingProduct, price: parseFloat(e.target.value)})} />
+                <select className="w-full p-4 bg-gray-50 rounded-xl text-sm" value={editingProduct.category || ''} onChange={e => setEditingProduct({...editingProduct, category: e.target.value})}>
+                  {settings.categories.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <textarea className="w-full p-4 bg-gray-50 rounded-xl text-sm h-20" placeholder="Descrição" value={editingProduct.description || ''} onChange={e => setEditingProduct({...editingProduct, description: e.target.value})} />
+                <input className="w-full p-4 bg-gray-50 rounded-xl text-sm text-[10px]" placeholder="URL da Imagem" value={editingProduct.image || ''} onChange={e => setEditingProduct({...editingProduct, image: e.target.value})} />
+             </div>
+             <div className="flex gap-2">
+                <button onClick={() => setEditingProduct(null)} className="flex-1 py-4 font-bold text-gray-400">Cancelar</button>
+                <button onClick={handleSaveProduct} className="flex-[2] py-4 bg-orange-500 text-white rounded-xl font-bold">Salvar</button>
+             </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
