@@ -7,14 +7,16 @@ import { INITIAL_PRODUCTS, DEFAULT_SETTINGS } from "../constants";
 
 declare var google: any;
 
-const firebaseConfig = {
-  apiKey: JSON.parse(process.env.FIREBASE_CONFIG || '{}').apiKey,
-  authDomain: JSON.parse(process.env.FIREBASE_CONFIG || '{}').authDomain,
-  projectId: JSON.parse(process.env.FIREBASE_CONFIG || '{}').projectId,
-  storageBucket: JSON.parse(process.env.FIREBASE_CONFIG || '{}').storageBucket,
-  messagingSenderId: JSON.parse(process.env.FIREBASE_CONFIG || '{}').messagingSenderId,
-  appId: JSON.parse(process.env.FIREBASE_CONFIG || '{}').appId
+const getFirebaseConfig = () => {
+  try {
+    const config = process.env.FIREBASE_CONFIG;
+    return typeof config === 'string' ? JSON.parse(config) : config;
+  } catch (e) {
+    return {};
+  }
 };
+
+const firebaseConfig = getFirebaseConfig();
 
 const initFirebase = (): { app: FirebaseApp | null, db: Firestore | null, auth: Auth | null } => {
   try {
@@ -24,8 +26,7 @@ const initFirebase = (): { app: FirebaseApp | null, db: Firestore | null, auth: 
       return { app, db: getFirestore(app), auth: getAuth(app) };
     }
     
-    const isConfigured = firebaseConfig.apiKey && firebaseConfig.projectId;
-    if (!isConfigured) return { app: null, db: null, auth: null };
+    if (!firebaseConfig.apiKey) return { app: null, db: null, auth: null };
     
     const app = initializeApp(firebaseConfig);
     return { app, db: getFirestore(app), auth: getAuth(app) };
@@ -36,7 +37,6 @@ const initFirebase = (): { app: FirebaseApp | null, db: Firestore | null, auth: 
 };
 
 const { db, auth } = initFirebase();
-
 export { db, auth };
 
 const PRODUCTS_COL = "products";
@@ -44,16 +44,6 @@ const SETTINGS_COL = "settings";
 const USERS_COL = "users";
 
 const isMockMode = !db || !auth;
-
-const getLocalData = (key: string, fallback: any) => {
-  const data = localStorage.getItem(key);
-  return data ? JSON.parse(data) : fallback;
-};
-
-const setLocalData = (key: string, data: any) => {
-  localStorage.setItem(key, JSON.stringify(data));
-  window.dispatchEvent(new Event('storage'));
-};
 
 export const loginWithGoogle = async (): Promise<any | null> => {
   if (isMockMode) {
@@ -78,14 +68,21 @@ export const loginWithGoogle = async (): Promise<any | null> => {
           try {
             const credential = GoogleAuthProvider.credential(response.credential);
             const result = await signInWithCredential(auth, credential);
+            
+            // Ao logar, garantimos que o usuário existe no banco (opcional)
+            // mas aqui apenas retornamos o user para o App tratar
             resolve(result.user);
           } catch (error) {
+            console.error("Erro ao autenticar com credencial:", error);
             reject(error);
           }
-        }
+        },
+        auto_select: false,
+        cancel_on_tap_outside: true
       });
       google.accounts.id.prompt();
     } catch (error) {
+      console.error("Erro GIS:", error);
       reject(error);
     }
   });
@@ -102,7 +99,7 @@ export const logout = async () => {
 
 export const subscribeAuth = (callback: (user: any | null) => void) => {
   if (isMockMode) {
-    const check = () => callback(getLocalData("mock_user", null));
+    const check = () => callback(JSON.parse(localStorage.getItem("mock_user") || 'null'));
     window.addEventListener('auth_change', check);
     check();
     return () => window.removeEventListener('auth_change', check);
@@ -118,17 +115,22 @@ export const checkAdminStatus = async (uid: string): Promise<boolean> => {
   
   try {
     const snap = await getDoc(doc(db, USERS_COL, uid));
-    return snap.exists() ? (snap.data() as UserProfile).isAdmin : false;
+    if (snap.exists()) {
+      return (snap.data() as UserProfile).isAdmin === true;
+    }
+    return false;
   } catch (e) {
+    console.error("Erro ao checar admin:", e);
     return false;
   }
 };
 
-// CRUD Subscriptions
+// --- CRUD ---
 export const subscribeProducts = (callback: (products: Product[]) => void) => {
   if (isMockMode || !db) {
-    callback(getLocalData(PRODUCTS_COL, INITIAL_PRODUCTS));
-    const h = () => callback(getLocalData(PRODUCTS_COL, INITIAL_PRODUCTS));
+    const data = JSON.parse(localStorage.getItem(PRODUCTS_COL) || JSON.stringify(INITIAL_PRODUCTS));
+    callback(data);
+    const h = () => callback(JSON.parse(localStorage.getItem(PRODUCTS_COL) || '[]'));
     window.addEventListener('storage', h);
     return () => window.removeEventListener('storage', h);
   }
@@ -137,10 +139,11 @@ export const subscribeProducts = (callback: (products: Product[]) => void) => {
 
 export const saveProductToDb = async (p: Product) => {
   if (isMockMode || !db) {
-    const list = getLocalData(PRODUCTS_COL, INITIAL_PRODUCTS);
+    const list = JSON.parse(localStorage.getItem(PRODUCTS_COL) || JSON.stringify(INITIAL_PRODUCTS));
     const idx = list.findIndex((i: any) => i.id === p.id);
     idx > -1 ? list[idx] = p : list.push(p);
-    setLocalData(PRODUCTS_COL, list);
+    localStorage.setItem(PRODUCTS_COL, JSON.stringify(list));
+    window.dispatchEvent(new Event('storage'));
     return;
   }
   await setDoc(doc(db, PRODUCTS_COL, p.id), p);
@@ -148,8 +151,9 @@ export const saveProductToDb = async (p: Product) => {
 
 export const deleteProductFromDb = async (id: string) => {
   if (isMockMode || !db) {
-    const list = getLocalData(PRODUCTS_COL, INITIAL_PRODUCTS).filter((i: any) => i.id !== id);
-    setLocalData(PRODUCTS_COL, list);
+    const list = JSON.parse(localStorage.getItem(PRODUCTS_COL) || '[]').filter((i: any) => i.id !== id);
+    localStorage.setItem(PRODUCTS_COL, JSON.stringify(list));
+    window.dispatchEvent(new Event('storage'));
     return;
   }
   await deleteDoc(doc(db, PRODUCTS_COL, id));
@@ -157,8 +161,8 @@ export const deleteProductFromDb = async (id: string) => {
 
 export const subscribeSettings = (callback: (s: BusinessSettings) => void) => {
   if (isMockMode || !db) {
-    callback(getLocalData(SETTINGS_COL, DEFAULT_SETTINGS));
-    const h = () => callback(getLocalData(SETTINGS_COL, DEFAULT_SETTINGS));
+    callback(JSON.parse(localStorage.getItem(SETTINGS_COL) || JSON.stringify(DEFAULT_SETTINGS)));
+    const h = () => callback(JSON.parse(localStorage.getItem(SETTINGS_COL) || JSON.stringify(DEFAULT_SETTINGS)));
     window.addEventListener('storage', h);
     return () => window.removeEventListener('storage', h);
   }
@@ -167,7 +171,8 @@ export const subscribeSettings = (callback: (s: BusinessSettings) => void) => {
 
 export const saveSettings = async (s: BusinessSettings) => {
   if (isMockMode || !db) {
-    setLocalData(SETTINGS_COL, s);
+    localStorage.setItem(SETTINGS_COL, JSON.stringify(s));
+    window.dispatchEvent(new Event('storage'));
     return;
   }
   await setDoc(doc(db, SETTINGS_COL, "general"), s);
