@@ -1,38 +1,49 @@
 
-import { initializeApp } from "@firebase/app";
-import { getFirestore, collection, setDoc, doc, getDoc, deleteDoc, onSnapshot } from "@firebase/firestore";
-import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, signInWithCredential } from "@firebase/auth";
+import { initializeApp, getApps, getApp, FirebaseApp } from "@firebase/app";
+import { getFirestore, collection, setDoc, doc, getDoc, deleteDoc, onSnapshot, Firestore } from "@firebase/firestore";
+import { getAuth, GoogleAuthProvider, onAuthStateChanged, signOut, signInWithCredential, Auth } from "@firebase/auth";
 import { Product, BusinessSettings, UserProfile } from "../types";
 import { INITIAL_PRODUCTS, DEFAULT_SETTINGS } from "../constants";
 
-// Declaração para o TypeScript reconhecer o objeto global do Google (GIS)
 declare var google: any;
 
-let firebaseConfig = {};
-try {
-  const configStr = process.env.FIREBASE_CONFIG || '{}';
-  firebaseConfig = JSON.parse(configStr);
-} catch (e) {
-  console.warn("FIREBASE_CONFIG não é um JSON válido. Entrando em modo mock.");
-}
+const firebaseConfig = {
+  apiKey: JSON.parse(process.env.FIREBASE_CONFIG || '{}').apiKey,
+  authDomain: JSON.parse(process.env.FIREBASE_CONFIG || '{}').authDomain,
+  projectId: JSON.parse(process.env.FIREBASE_CONFIG || '{}').projectId,
+  storageBucket: JSON.parse(process.env.FIREBASE_CONFIG || '{}').storageBucket,
+  messagingSenderId: JSON.parse(process.env.FIREBASE_CONFIG || '{}').messagingSenderId,
+  appId: JSON.parse(process.env.FIREBASE_CONFIG || '{}').appId
+};
 
-let db: any = null;
-let auth: any = null;
-const isMockMode = !firebaseConfig || !('apiKey' in firebaseConfig) || !(firebaseConfig as any).apiKey;
-
-if (!isMockMode) {
+const initFirebase = (): { app: FirebaseApp | null, db: Firestore | null, auth: Auth | null } => {
   try {
+    const apps = getApps();
+    if (apps.length > 0) {
+      const app = getApp();
+      return { app, db: getFirestore(app), auth: getAuth(app) };
+    }
+    
+    const isConfigured = firebaseConfig.apiKey && firebaseConfig.projectId;
+    if (!isConfigured) return { app: null, db: null, auth: null };
+    
     const app = initializeApp(firebaseConfig);
-    db = getFirestore(app);
-    auth = getAuth(app);
+    return { app, db: getFirestore(app), auth: getAuth(app) };
   } catch (e) {
-    console.error("Erro ao inicializar Firebase real:", e);
+    console.error("Erro Firebase:", e);
+    return { app: null, db: null, auth: null };
   }
-}
+};
+
+const { db, auth } = initFirebase();
+
+export { db, auth };
 
 const PRODUCTS_COL = "products";
 const SETTINGS_COL = "settings";
 const USERS_COL = "users";
+
+const isMockMode = !db || !auth;
 
 const getLocalData = (key: string, fallback: any) => {
   const data = localStorage.getItem(key);
@@ -44,10 +55,6 @@ const setLocalData = (key: string, data: any) => {
   window.dispatchEvent(new Event('storage'));
 };
 
-/**
- * Realiza o login utilizando o Google Identity Services (GIS) com o Client ID fornecido.
- * Isso garante que a autenticação use a "chave certa" (OAuth2 Client ID).
- */
 export const loginWithGoogle = async (): Promise<any | null> => {
   if (isMockMode) {
     const mockUser = { 
@@ -55,7 +62,7 @@ export const loginWithGoogle = async (): Promise<any | null> => {
       displayName: "Vera Admin", 
       email: "admin@teste.com",
       photoURL: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
-    } as any;
+    };
     localStorage.setItem("mock_user", JSON.stringify(mockUser));
     window.dispatchEvent(new Event('auth_change'));
     return mockUser;
@@ -65,33 +72,20 @@ export const loginWithGoogle = async (): Promise<any | null> => {
 
   return new Promise((resolve, reject) => {
     try {
-      // Configura o cliente Google Identity Services
       google.accounts.id.initialize({
         client_id: process.env.GOOGLE_CLIENT_ID,
         callback: async (response: any) => {
           try {
-            // Cria a credencial do Firebase a partir do ID Token do Google
             const credential = GoogleAuthProvider.credential(response.credential);
             const result = await signInWithCredential(auth, credential);
             resolve(result.user);
           } catch (error) {
-            console.error("Erro ao validar credencial no Firebase:", error);
             reject(error);
           }
-        },
-        auto_select: false,
-        cancel_on_tap_outside: true
+        }
       });
-
-      // Exibe o seletor de contas do Google
       google.accounts.id.prompt();
-      
-      // Também podemos forçar a exibição do popup caso o prompt falhe ou para melhor UX no clique
-      // (Nota: google.accounts.id.prompt() é silencioso em alguns casos, 
-      // mas para um botão de login manual, renderizar um botão invisível e clicar nele é um truque comum 
-      // ou apenas usar o seletor nativo).
     } catch (error) {
-      console.error("Erro ao inicializar Google OAuth2:", error);
       reject(error);
     }
   });
@@ -103,8 +97,7 @@ export const logout = async () => {
     window.dispatchEvent(new Event('auth_change'));
     return;
   }
-  if (!auth) return;
-  await signOut(auth);
+  if (auth) await signOut(auth);
 };
 
 export const subscribeAuth = (callback: (user: any | null) => void) => {
@@ -118,18 +111,28 @@ export const subscribeAuth = (callback: (user: any | null) => void) => {
   return onAuthStateChanged(auth, callback);
 };
 
-// --- CRUD OPERAÇÕES (Permanecem iguais) ---
+export const checkAdminStatus = async (uid: string): Promise<boolean> => {
+  if (!uid) return false;
+  if (isMockMode) return uid === "admin-test";
+  if (!db) return false;
+  
+  try {
+    const snap = await getDoc(doc(db, USERS_COL, uid));
+    return snap.exists() ? (snap.data() as UserProfile).isAdmin : false;
+  } catch (e) {
+    return false;
+  }
+};
 
+// CRUD Subscriptions
 export const subscribeProducts = (callback: (products: Product[]) => void) => {
   if (isMockMode || !db) {
     callback(getLocalData(PRODUCTS_COL, INITIAL_PRODUCTS));
-    const handler = () => callback(getLocalData(PRODUCTS_COL, INITIAL_PRODUCTS));
-    window.addEventListener('storage', handler);
-    return () => window.removeEventListener('storage', handler);
+    const h = () => callback(getLocalData(PRODUCTS_COL, INITIAL_PRODUCTS));
+    window.addEventListener('storage', h);
+    return () => window.removeEventListener('storage', h);
   }
-  return onSnapshot(collection(db, PRODUCTS_COL), (snap) => {
-    callback(snap.docs.map(d => d.data() as Product));
-  });
+  return onSnapshot(collection(db, PRODUCTS_COL), (snap) => callback(snap.docs.map(d => d.data() as Product)));
 };
 
 export const saveProductToDb = async (p: Product) => {
@@ -155,14 +158,11 @@ export const deleteProductFromDb = async (id: string) => {
 export const subscribeSettings = (callback: (s: BusinessSettings) => void) => {
   if (isMockMode || !db) {
     callback(getLocalData(SETTINGS_COL, DEFAULT_SETTINGS));
-    const handler = () => callback(getLocalData(SETTINGS_COL, DEFAULT_SETTINGS));
-    window.addEventListener('storage', handler);
-    return () => window.removeEventListener('storage', handler);
+    const h = () => callback(getLocalData(SETTINGS_COL, DEFAULT_SETTINGS));
+    window.addEventListener('storage', h);
+    return () => window.removeEventListener('storage', h);
   }
-  return onSnapshot(doc(db, SETTINGS_COL, "general"), (snap) => {
-    if (snap.exists()) callback(snap.data() as BusinessSettings);
-    else callback(DEFAULT_SETTINGS);
-  });
+  return onSnapshot(doc(db, SETTINGS_COL, "general"), (snap) => snap.exists() ? callback(snap.data() as BusinessSettings) : callback(DEFAULT_SETTINGS));
 };
 
 export const saveSettings = async (s: BusinessSettings) => {
@@ -171,20 +171,4 @@ export const saveSettings = async (s: BusinessSettings) => {
     return;
   }
   await setDoc(doc(db, SETTINGS_COL, "general"), s);
-};
-
-export const checkAdminStatus = async (uid: string): Promise<boolean> => {
-  if (!uid) return false;
-  if (isMockMode || !db) {
-    return uid === "admin-test";
-  }
-  try {
-    const snap = await getDoc(doc(db, USERS_COL, uid));
-    if (snap.exists()) {
-      return (snap.data() as UserProfile).isAdmin;
-    }
-  } catch (e) {
-    console.error("Erro ao verificar admin status:", e);
-  }
-  return false;
 };

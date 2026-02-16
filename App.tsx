@@ -23,11 +23,11 @@ import {
   CreditCard,
   Banknote,
   Smartphone,
-  LogIn,
   LogOut,
-  User as UserIcon,
   MessageSquare,
-  ShieldAlert
+  ShieldAlert,
+  ChefHat,
+  LogIn
 } from 'lucide-react';
 import { Product, CartItem, ViewMode, BusinessSettings } from './types';
 import { ADMIN_PHONE, WEEK_DAYS, DEFAULT_SETTINGS } from './constants';
@@ -53,17 +53,19 @@ const fileToBase64 = (file: File): Promise<string> => {
 };
 
 export default function App() {
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [isVerifyingAdmin, setIsVerifyingAdmin] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.CUSTOMER);
   const [products, setProducts] = useState<Product[]>([]);
   const [settings, setSettings] = useState<BusinessSettings>(DEFAULT_SETTINGS);
-  const [loading, setLoading] = useState(true);
-  const [authLoading, setAuthLoading] = useState(false);
+  const [loadingMenu, setLoadingMenu] = useState(true);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('');
   const [checkoutStep, setCheckoutStep] = useState(0);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [currentUser, setCurrentUser] = useState<any>(null);
   
   const [customerInfo, setCustomerInfo] = useState({
     name: '',
@@ -73,31 +75,38 @@ export default function App() {
 
   const isMock = !process.env.FIREBASE_CONFIG || process.env.FIREBASE_CONFIG === '{}' || JSON.parse(process.env.FIREBASE_CONFIG).apiKey === "";
 
+  // Efeito de Inicialização de Autenticação
+  useEffect(() => {
+    const unsubAuth = subscribeAuth(async (user) => {
+      if (user) {
+        setIsVerifyingAdmin(true);
+        const adminStatus = await checkAdminStatus(user.uid);
+        setCurrentUser(user);
+        setIsAdmin(adminStatus);
+        setIsVerifyingAdmin(false);
+      } else {
+        setCurrentUser(null);
+        setIsAdmin(false);
+        setViewMode(ViewMode.CUSTOMER);
+      }
+      setIsInitializing(false);
+    });
+
+    return () => unsubAuth();
+  }, []);
+
+  // Efeito de Carregamento de Dados (Independente de login para visitantes verem o menu)
   useEffect(() => {
     const unsubProducts = subscribeProducts(setProducts);
     const unsubSettings = subscribeSettings((s) => {
       setSettings(s);
-      if (s.categories && s.categories.length > 0 && !selectedCategory) {
-        setSelectedCategory(s.categories[0]);
-      }
-      setLoading(false);
-    });
-
-    const unsubAuth = subscribeAuth(async (user) => {
-      setCurrentUser(user);
-      if (user) {
-        const admin = await checkAdminStatus(user.uid);
-        setIsAdmin(admin);
-      } else {
-        setIsAdmin(false);
-        setViewMode(ViewMode.CUSTOMER);
-      }
+      if (s.categories?.length > 0 && !selectedCategory) setSelectedCategory(s.categories[0]);
+      setLoadingMenu(false);
     });
 
     return () => {
       unsubProducts();
       unsubSettings();
-      unsubAuth();
     };
   }, []);
 
@@ -119,6 +128,21 @@ export default function App() {
   const cartTotal = useMemo(() => cart.reduce((acc, item) => acc + (item.product.price * item.quantity), 0), [cart]);
   const cartItemCount = useMemo(() => cart.reduce((a, b) => a + b.quantity, 0), [cart]);
 
+  const handleLogin = async () => {
+    setIsVerifyingAdmin(true);
+    try {
+      await loginWithGoogle();
+    } catch (e) {
+      alert("Erro ao entrar com Google.");
+    } finally {
+      setIsVerifyingAdmin(false);
+    }
+  };
+
+  const handleLogout = () => {
+    if (confirm("Deseja sair da sua conta?")) logout();
+  };
+
   const addToCart = (product: Product) => {
     if (!shopStatus.open) return;
     setCart(prev => {
@@ -128,60 +152,31 @@ export default function App() {
     });
   };
 
+  const removeFromCart = (productId: string) => setCart(prev => prev.filter(item => item.product.id !== productId));
   const updateCartQuantity = (productId: string, delta: number) => {
-    setCart(prev => prev.map(item => {
-      if (item.product.id === productId) {
-        const newQty = Math.max(1, item.quantity + delta);
-        return { ...item, quantity: newQty };
-      }
-      return item;
-    }));
+    setCart(prev => prev.map(item => item.product.id === productId ? { ...item, quantity: Math.max(1, item.quantity + delta) } : item));
   };
-
   const updateItemObservation = (productId: string, observation: string) => {
     setCart(prev => prev.map(item => item.product.id === productId ? { ...item, observations: observation } : item));
   };
 
-  const removeFromCart = (productId: string) => {
-    setCart(prev => prev.filter(item => item.product.id !== productId));
-  };
-
   const handleCheckout = () => {
-    const itemsList = cart.map(item => 
-      `${item.quantity}x ${item.product.name}${item.observations ? `\n   Obs: ${item.observations}` : ''} (R$ ${(item.quantity * item.product.price).toFixed(2)})`
-    ).join('\n');
-    
-    const message = encodeURIComponent(
-      `*NOVO PEDIDO - ${settings.name}*\n\n` +
-      `👤 *Cliente:* ${customerInfo.name}\n` +
-      `📍 *Endereço:* ${customerInfo.address}\n` +
-      `💳 *Pagamento:* ${customerInfo.paymentMethod}\n\n` +
-      `🍱 *Itens:*\n${itemsList}\n\n` +
-      `💰 *Total:* R$ ${cartTotal.toFixed(2)}`
-    );
+    const itemsList = cart.map(item => `${item.quantity}x ${item.product.name}${item.observations ? `\n   Obs: ${item.observations}` : ''}`).join('\n');
+    const message = encodeURIComponent(`*NOVO PEDIDO - ${settings.name}*\n\n👤 Cliente: ${customerInfo.name}\n📍 Endereço: ${customerInfo.address}\n💳 Pagamento: ${customerInfo.paymentMethod}\n\n🍱 Itens:\n${itemsList}\n\n💰 Total: R$ ${cartTotal.toFixed(2)}`);
     window.open(`https://wa.me/${ADMIN_PHONE}?text=${message}`, '_blank');
-    setCart([]);
-    setCheckoutStep(0);
-    setIsCartOpen(false);
+    setCart([]); setCheckoutStep(0); setIsCartOpen(false);
   };
 
-  const handleLogin = async () => {
-    setAuthLoading(true);
-    try {
-      await loginWithGoogle();
-    } catch (error) {
-      console.error("Login error:", error);
-      alert("Erro ao entrar com Google. Tente novamente.");
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
-  const handleLogout = async () => {
-    if (confirm("Deseja sair da conta?")) {
-      await logout();
-    }
-  };
+  if (isInitializing || isVerifyingAdmin) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
+        <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mb-6"></div>
+        <p className="text-gray-400 font-medium text-sm animate-pulse">
+          {isInitializing ? "Iniciando sistema..." : "Verificando credenciais..."}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 overflow-x-hidden">
@@ -209,54 +204,41 @@ export default function App() {
           </div>
           
           <div className="flex items-center gap-2">
-            {!currentUser ? (
+            {isAdmin && (
               <button 
-                onClick={handleLogin}
-                disabled={authLoading}
-                className="flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 bg-white border border-gray-200 hover:border-gray-300 rounded-full shadow-sm transition-all active:scale-95 text-xs sm:text-sm font-semibold text-gray-700 disabled:opacity-50"
+                onClick={() => setViewMode(prev => prev === ViewMode.CUSTOMER ? ViewMode.ADMIN : ViewMode.CUSTOMER)}
+                className={`p-2 transition-colors rounded-lg ${viewMode === ViewMode.ADMIN ? 'bg-orange-50 text-orange-600' : 'text-gray-400 hover:text-orange-500'}`}
+                title="Painel Admin"
               >
-                {authLoading ? (
-                  <RefreshCw size={16} className="animate-spin text-orange-500" />
-                ) : (
-                  <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-4 h-4" alt="Google" />
-                )}
-                <span>{authLoading ? 'Entrando...' : 'Entrar'}</span>
+                {viewMode === ViewMode.CUSTOMER ? <LayoutDashboard size={20} /> : <Utensils size={20} />}
+              </button>
+            )}
+
+            {currentUser ? (
+              <button onClick={handleLogout} className="group relative">
+                <img 
+                  src={currentUser.photoURL || `https://ui-avatars.com/api/?name=${currentUser.displayName}&background=random`} 
+                  className="w-9 h-9 rounded-full border-2 border-white shadow-sm hover:ring-2 hover:ring-orange-200 transition-all" 
+                  alt="Profile"
+                />
+                <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm border border-gray-100">
+                  <LogOut size={10} className="text-gray-400" />
+                </div>
               </button>
             ) : (
-              <div className="flex items-center gap-2">
-                {isAdmin && (
-                  <button 
-                    onClick={() => setViewMode(prev => prev === ViewMode.CUSTOMER ? ViewMode.ADMIN : ViewMode.CUSTOMER)}
-                    className={`p-2 transition-colors rounded-lg ${viewMode === ViewMode.ADMIN ? 'bg-orange-50 text-orange-600' : 'text-gray-400 hover:text-orange-500'}`}
-                    title="Painel Admin"
-                  >
-                    {viewMode === ViewMode.CUSTOMER ? <LayoutDashboard size={20} /> : <Utensils size={20} />}
-                  </button>
-                )}
-                <div className="flex items-center gap-2 bg-gray-50 pr-1 pl-3 py-1 rounded-full border border-gray-100 group relative">
-                   <div className="flex flex-col items-end mr-1 hidden sm:flex">
-                     <span className="text-[10px] font-bold text-gray-900 leading-none">{currentUser.displayName?.split(' ')[0]}</span>
-                     {isAdmin && <span className="text-[8px] font-black text-orange-500 uppercase tracking-tighter">Admin</span>}
-                   </div>
-                   <button onClick={handleLogout} className="relative">
-                      <img 
-                        src={currentUser.photoURL || `https://ui-avatars.com/api/?name=${currentUser.displayName}&background=random`} 
-                        className="w-8 h-8 rounded-full border-2 border-white shadow-sm hover:ring-2 hover:ring-orange-200 transition-all" 
-                        alt="Profile"
-                      />
-                      <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm border border-gray-100 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <LogOut size={10} className="text-gray-400" />
-                      </div>
-                   </button>
-                </div>
-              </div>
+              <button 
+                onClick={handleLogin}
+                className="flex items-center gap-2 bg-orange-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-orange-600 transition-all active:scale-95 shadow-md shadow-orange-100"
+              >
+                <LogIn size={14} /> Entrar
+              </button>
             )}
           </div>
         </div>
       </header>
 
       <main className="flex-1 max-w-4xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
-        {loading ? (
+        {loadingMenu ? (
           <div className="flex flex-col items-center justify-center py-32 text-gray-300">
             <RefreshCw size={32} className="animate-spin mb-4 text-orange-400" />
             <p className="text-sm font-medium">Carregando cardápio...</p>
@@ -359,7 +341,6 @@ export default function App() {
                               <button onClick={() => removeFromCart(item.product.id)} className="p-1 text-gray-300 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
                             </div>
                             
-                            {/* Observações */}
                             <div className="relative group">
                               <MessageSquare size={12} className="absolute left-3 top-3 text-gray-300 group-focus-within:text-orange-400" />
                               <input 
