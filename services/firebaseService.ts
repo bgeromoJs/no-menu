@@ -1,37 +1,29 @@
-
+// Fixed: Removed leading blank lines and ensured clean modular imports from Firebase v9+.
 import { initializeApp } from "firebase/app";
-import { 
-  getFirestore, 
-  collection, 
-  setDoc, 
-  doc, 
-  getDoc,
-  deleteDoc, 
-  onSnapshot 
-} from "firebase/firestore";
-import { 
-  getAuth, 
-  signInWithPopup, 
-  GoogleAuthProvider, 
-  onAuthStateChanged,
-  signOut
-} from "firebase/auth";
-import { Product, BusinessSettings, UserProfile } from "../types";
-import { INITIAL_PRODUCTS, DEFAULT_SETTINGS } from "../constants";
+import { getFirestore, collection, setDoc, doc, getDoc, deleteDoc, onSnapshot } from "firebase/firestore";
+import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
+import { Product, BusinessSettings, UserProfile } from "../types.ts";
+import { INITIAL_PRODUCTS, DEFAULT_SETTINGS } from "../constants.ts";
 
-const firebaseConfig = JSON.parse(process.env.FIREBASE_CONFIG || '{}');
+let firebaseConfig = {};
+try {
+  const configStr = process.env.FIREBASE_CONFIG || '{}';
+  firebaseConfig = JSON.parse(configStr);
+} catch (e) {
+  console.warn("FIREBASE_CONFIG não é um JSON válido. Entrando em modo mock.");
+}
+
 let db: any = null;
 let auth: any = null;
-const isMockMode = !firebaseConfig.apiKey;
+const isMockMode = !firebaseConfig || !('apiKey' in firebaseConfig) || !(firebaseConfig as any).apiKey;
 
 if (!isMockMode) {
   try {
-    // Correct modular initialization for Firebase v9+ to resolve import errors.
     const app = initializeApp(firebaseConfig);
     db = getFirestore(app);
     auth = getAuth(app);
   } catch (e) {
-    console.error("Firebase Error:", e);
+    console.error("Erro ao inicializar Firebase real:", e);
   }
 }
 
@@ -39,7 +31,6 @@ const PRODUCTS_COL = "products";
 const SETTINGS_COL = "settings";
 const USERS_COL = "users";
 
-// --- MOCK HELPERS ---
 const getLocalData = (key: string, fallback: any) => {
   const data = localStorage.getItem(key);
   return data ? JSON.parse(data) : fallback;
@@ -50,11 +41,6 @@ const setLocalData = (key: string, data: any) => {
   window.dispatchEvent(new Event('storage'));
 };
 
-// --- AUTH ---
-/**
- * Log in with Google. 
- * Using 'any' as return type for User to bypass import issues in this environment.
- */
 export const loginWithGoogle = async (): Promise<any | null> => {
   if (isMockMode) {
     const mockUser = { uid: "admin-test", displayName: "Vera Admin", email: "admin@teste.com" } as any;
@@ -67,9 +53,6 @@ export const loginWithGoogle = async (): Promise<any | null> => {
   return result.user;
 };
 
-/**
- * Log out from the current session.
- */
 export const logout = async () => {
   if (isMockMode) {
     localStorage.removeItem("mock_user");
@@ -79,10 +62,6 @@ export const logout = async () => {
   await signOut(auth);
 };
 
-/**
- * Subscribe to authentication state changes.
- * Callback uses 'any' for the user parameter to avoid missing type export errors from firebase/auth.
- */
 export const subscribeAuth = (callback: (user: any | null) => void) => {
   if (isMockMode) {
     const check = () => callback(getLocalData("mock_user", null));
@@ -90,10 +69,10 @@ export const subscribeAuth = (callback: (user: any | null) => void) => {
     check();
     return () => window.removeEventListener('auth_change', check);
   }
+  if (!auth) return () => {};
   return onAuthStateChanged(auth, callback);
 };
 
-// --- PRODUCTS ---
 export const subscribeProducts = (callback: (products: Product[]) => void) => {
   if (isMockMode || !db) {
     callback(getLocalData(PRODUCTS_COL, INITIAL_PRODUCTS));
@@ -126,7 +105,6 @@ export const deleteProductFromDb = async (id: string) => {
   await deleteDoc(doc(db, PRODUCTS_COL, id));
 };
 
-// --- SETTINGS ---
 export const subscribeSettings = (callback: (s: BusinessSettings) => void) => {
   if (isMockMode || !db) {
     callback(getLocalData(SETTINGS_COL, DEFAULT_SETTINGS));
@@ -148,7 +126,6 @@ export const saveSettings = async (s: BusinessSettings) => {
   await setDoc(doc(db, SETTINGS_COL, "general"), s);
 };
 
-// --- USER / ADMIN CHECK ---
 export const checkAdminStatus = async (uid: string): Promise<boolean> => {
   if (!uid) return false;
   if (isMockMode || !db) {

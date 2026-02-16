@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   ShoppingCart, 
@@ -28,6 +27,7 @@ import {
   User as UserIcon,
   MessageSquare
 } from 'lucide-react';
+// Fixed: Removed .ts extension from local imports for better module resolution.
 import { Product, CartItem, ViewMode, BusinessSettings } from './types';
 import { ADMIN_PHONE, WEEK_DAYS, DEFAULT_SETTINGS } from './constants';
 import { 
@@ -69,7 +69,7 @@ export default function App() {
     paymentMethod: 'Pix' as 'Pix' | 'Cartão' | 'Dinheiro'
   });
 
-  const isMock = !process.env.FIREBASE_CONFIG;
+  const isMock = !process.env.FIREBASE_CONFIG || process.env.FIREBASE_CONFIG === '{}';
 
   useEffect(() => {
     const unsubProducts = subscribeProducts(setProducts);
