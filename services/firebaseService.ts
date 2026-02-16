@@ -1,10 +1,12 @@
 
-// Fix: Use direct modular imports from @firebase subpackages to resolve member export errors.
 import { initializeApp } from "@firebase/app";
 import { getFirestore, collection, setDoc, doc, getDoc, deleteDoc, onSnapshot } from "@firebase/firestore";
-import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "@firebase/auth";
+import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, signInWithCredential } from "@firebase/auth";
 import { Product, BusinessSettings, UserProfile } from "../types";
 import { INITIAL_PRODUCTS, DEFAULT_SETTINGS } from "../constants";
+
+// Declaração para o TypeScript reconhecer o objeto global do Google (GIS)
+declare var google: any;
 
 let firebaseConfig = {};
 try {
@@ -20,9 +22,7 @@ const isMockMode = !firebaseConfig || !('apiKey' in firebaseConfig) || !(firebas
 
 if (!isMockMode) {
   try {
-    // Fix: initializeApp is correctly exported from @firebase/app
     const app = initializeApp(firebaseConfig);
-    // Fix: getFirestore and getAuth are correctly exported from their respective modular packages
     db = getFirestore(app);
     auth = getAuth(app);
   } catch (e) {
@@ -45,8 +45,8 @@ const setLocalData = (key: string, data: any) => {
 };
 
 /**
- * Realiza o login utilizando o Google OAuth2.
- * Caso esteja em modo Mock, simula um login de administrador.
+ * Realiza o login utilizando o Google Identity Services (GIS) com o Client ID fornecido.
+ * Isso garante que a autenticação use a "chave certa" (OAuth2 Client ID).
  */
 export const loginWithGoogle = async (): Promise<any | null> => {
   if (isMockMode) {
@@ -62,24 +62,41 @@ export const loginWithGoogle = async (): Promise<any | null> => {
   }
   
   if (!auth) throw new Error("Firebase Auth não inicializado");
-  
-  const provider = new GoogleAuthProvider();
-  // Solicita acesso ao perfil e email
-  provider.addScope('profile');
-  provider.addScope('email');
-  
-  try {
-    const result = await signInWithPopup(auth, provider);
-    return result.user;
-  } catch (error) {
-    console.error("Erro no Login Google OAuth2:", error);
-    throw error;
-  }
+
+  return new Promise((resolve, reject) => {
+    try {
+      // Configura o cliente Google Identity Services
+      google.accounts.id.initialize({
+        client_id: process.env.GOOGLE_CLIENT_ID,
+        callback: async (response: any) => {
+          try {
+            // Cria a credencial do Firebase a partir do ID Token do Google
+            const credential = GoogleAuthProvider.credential(response.credential);
+            const result = await signInWithCredential(auth, credential);
+            resolve(result.user);
+          } catch (error) {
+            console.error("Erro ao validar credencial no Firebase:", error);
+            reject(error);
+          }
+        },
+        auto_select: false,
+        cancel_on_tap_outside: true
+      });
+
+      // Exibe o seletor de contas do Google
+      google.accounts.id.prompt();
+      
+      // Também podemos forçar a exibição do popup caso o prompt falhe ou para melhor UX no clique
+      // (Nota: google.accounts.id.prompt() é silencioso em alguns casos, 
+      // mas para um botão de login manual, renderizar um botão invisível e clicar nele é um truque comum 
+      // ou apenas usar o seletor nativo).
+    } catch (error) {
+      console.error("Erro ao inicializar Google OAuth2:", error);
+      reject(error);
+    }
+  });
 };
 
-/**
- * Finaliza a sessão atual.
- */
 export const logout = async () => {
   if (isMockMode) {
     localStorage.removeItem("mock_user");
@@ -90,9 +107,6 @@ export const logout = async () => {
   await signOut(auth);
 };
 
-/**
- * Monitora mudanças no estado de autenticação.
- */
 export const subscribeAuth = (callback: (user: any | null) => void) => {
   if (isMockMode) {
     const check = () => callback(getLocalData("mock_user", null));
@@ -104,7 +118,7 @@ export const subscribeAuth = (callback: (user: any | null) => void) => {
   return onAuthStateChanged(auth, callback);
 };
 
-// --- CRUD OPERAÇÕES ---
+// --- CRUD OPERAÇÕES (Permanecem iguais) ---
 
 export const subscribeProducts = (callback: (products: Product[]) => void) => {
   if (isMockMode || !db) {
@@ -159,10 +173,6 @@ export const saveSettings = async (s: BusinessSettings) => {
   await setDoc(doc(db, SETTINGS_COL, "general"), s);
 };
 
-/**
- * Verifica se o UID do usuário tem permissão administrativa.
- * Em modo real, busca na coleção 'users'.
- */
 export const checkAdminStatus = async (uid: string): Promise<boolean> => {
   if (!uid) return false;
   if (isMockMode || !db) {
