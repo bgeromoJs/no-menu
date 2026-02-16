@@ -1,7 +1,9 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+// Initialize the Google GenAI client using the API key from the environment.
+// Always use process.env.API_KEY directly without fallbacks as per guidelines.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const generateProductDescription = async (productName: string): Promise<string> => {
   try {
@@ -12,6 +14,7 @@ export const generateProductDescription = async (productName: string): Promise<s
         maxOutputTokens: 100,
       },
     });
+    // Access the 'text' property directly as per Google GenAI SDK guidelines.
     return response.text || "Descrição deliciosa em breve!";
   } catch (error) {
     console.error("Gemini Error:", error);
