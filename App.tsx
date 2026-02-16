@@ -26,7 +26,8 @@ import {
   LogIn,
   LogOut,
   User as UserIcon,
-  MessageSquare
+  MessageSquare,
+  Download
 } from 'lucide-react';
 import { Product, CartItem, ViewMode, BusinessSettings } from './types';
 import { ADMIN_PHONE, WEEK_DAYS, DEFAULT_SETTINGS } from './constants';
@@ -62,6 +63,7 @@ export default function App() {
   const [checkoutStep, setCheckoutStep] = useState(0);
   const [isAdmin, setIsAdmin] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
   
   const [customerInfo, setCustomerInfo] = useState({
     name: '',
@@ -72,6 +74,12 @@ export default function App() {
   const isMock = !process.env.FIREBASE_CONFIG;
 
   useEffect(() => {
+    // Escuta evento de instalação (PWA)
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    });
+
     const unsubProducts = subscribeProducts(setProducts);
     const unsubSettings = subscribeSettings((s) => {
       setSettings(s);
@@ -98,6 +106,15 @@ export default function App() {
       unsubAuth();
     };
   }, []);
+
+  const handleInstallClick = async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setInstallPrompt(null);
+    }
+  };
 
   const shopStatus = useMemo(() => {
     if (settings.manualClosed) return { open: false, reason: "Fechado manualmente" };
@@ -197,6 +214,15 @@ export default function App() {
           </div>
           
           <div className="flex items-center gap-2">
+            {installPrompt && (
+              <button 
+                onClick={handleInstallClick}
+                className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-orange-50 text-orange-600 rounded-lg text-xs font-bold border border-orange-100 hover:bg-orange-100 transition-colors"
+              >
+                <Download size={14} /> Instalar App
+              </button>
+            )}
+
             {isAdmin && (
               <button 
                 onClick={() => setViewMode(prev => prev === ViewMode.CUSTOMER ? ViewMode.ADMIN : ViewMode.CUSTOMER)}
@@ -228,6 +254,24 @@ export default function App() {
             {!shopStatus.open && (
               <div className="bg-red-50 border border-red-100 p-4 rounded-xl text-center">
                 <p className="text-red-700 font-bold text-xs sm:text-sm">Fechados para pedidos no momento.</p>
+              </div>
+            )}
+
+            {installPrompt && (
+              <div className="sm:hidden bg-white border border-gray-100 p-4 rounded-xl shadow-sm flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center text-white"><Download size={20}/></div>
+                  <div>
+                    <p className="text-sm font-bold">Instalar Aplicativo</p>
+                    <p className="text-[10px] text-gray-500">Acesse direto da sua tela inicial</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={handleInstallClick}
+                  className="bg-orange-500 text-white px-4 py-2 rounded-lg text-xs font-bold"
+                >
+                  Baixar
+                </button>
               </div>
             )}
 

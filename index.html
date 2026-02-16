@@ -5,11 +5,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Vera Marmitex - Pedido Fácil</title>
+    <link rel="manifest" href="manifest.json" />
+    <meta name="theme-color" content="#f97316" />
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1046/1046857.png" />
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
       :root {
-        --primary: #f97316; /* Laranja Primário */
+        --primary: #f97316;
         --primary-dark: #ea580c;
         --bg: #f9fafb;
         --text-main: #111827;
@@ -59,5 +62,12 @@
 </head>
   <body class="antialiased">
     <div id="root"></div>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('sw.js').catch(err => console.log('SW Registration failed', err));
+        });
+      }
+    </script>
   </body>
 </html>
