@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   ShoppingCart, 
@@ -25,9 +26,9 @@ import {
   LogIn,
   LogOut,
   User as UserIcon,
-  MessageSquare
+  MessageSquare,
+  ShieldAlert
 } from 'lucide-react';
-// Fixed: Removed .ts extension from local imports for better module resolution.
 import { Product, CartItem, ViewMode, BusinessSettings } from './types';
 import { ADMIN_PHONE, WEEK_DAYS, DEFAULT_SETTINGS } from './constants';
 import { 
@@ -56,6 +57,7 @@ export default function App() {
   const [products, setProducts] = useState<Product[]>([]);
   const [settings, setSettings] = useState<BusinessSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -69,7 +71,7 @@ export default function App() {
     paymentMethod: 'Pix' as 'Pix' | 'Cartão' | 'Dinheiro'
   });
 
-  const isMock = !process.env.FIREBASE_CONFIG || process.env.FIREBASE_CONFIG === '{}';
+  const isMock = !process.env.FIREBASE_CONFIG || process.env.FIREBASE_CONFIG === '{}' || JSON.parse(process.env.FIREBASE_CONFIG).apiKey === "";
 
   useEffect(() => {
     const unsubProducts = subscribeProducts(setProducts);
@@ -163,11 +165,21 @@ export default function App() {
     setIsCartOpen(false);
   };
 
-  const handleAuth = async () => {
-    if (currentUser) {
-      if (confirm("Deseja sair da conta?")) await logout();
-    } else {
+  const handleLogin = async () => {
+    setAuthLoading(true);
+    try {
       await loginWithGoogle();
+    } catch (error) {
+      console.error("Login error:", error);
+      alert("Erro ao entrar com Google. Tente novamente.");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    if (confirm("Deseja sair da conta?")) {
+      await logout();
     }
   };
 
@@ -197,22 +209,48 @@ export default function App() {
           </div>
           
           <div className="flex items-center gap-2">
-            {isAdmin && (
+            {!currentUser ? (
               <button 
-                onClick={() => setViewMode(prev => prev === ViewMode.CUSTOMER ? ViewMode.ADMIN : ViewMode.CUSTOMER)}
-                className={`p-2 transition-colors rounded-lg ${viewMode === ViewMode.ADMIN ? 'bg-orange-50 text-orange-600' : 'text-gray-400 hover:text-orange-500'}`}
-                title="Painel Admin"
+                onClick={handleLogin}
+                disabled={authLoading}
+                className="flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 bg-white border border-gray-200 hover:border-gray-300 rounded-full shadow-sm transition-all active:scale-95 text-xs sm:text-sm font-semibold text-gray-700 disabled:opacity-50"
               >
-                {viewMode === ViewMode.CUSTOMER ? <LayoutDashboard size={22} /> : <Utensils size={22} />}
+                {authLoading ? (
+                  <RefreshCw size={16} className="animate-spin text-orange-500" />
+                ) : (
+                  <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-4 h-4" alt="Google" />
+                )}
+                <span>{authLoading ? 'Entrando...' : 'Entrar'}</span>
               </button>
+            ) : (
+              <div className="flex items-center gap-2">
+                {isAdmin && (
+                  <button 
+                    onClick={() => setViewMode(prev => prev === ViewMode.CUSTOMER ? ViewMode.ADMIN : ViewMode.CUSTOMER)}
+                    className={`p-2 transition-colors rounded-lg ${viewMode === ViewMode.ADMIN ? 'bg-orange-50 text-orange-600' : 'text-gray-400 hover:text-orange-500'}`}
+                    title="Painel Admin"
+                  >
+                    {viewMode === ViewMode.CUSTOMER ? <LayoutDashboard size={20} /> : <Utensils size={20} />}
+                  </button>
+                )}
+                <div className="flex items-center gap-2 bg-gray-50 pr-1 pl-3 py-1 rounded-full border border-gray-100 group relative">
+                   <div className="flex flex-col items-end mr-1 hidden sm:flex">
+                     <span className="text-[10px] font-bold text-gray-900 leading-none">{currentUser.displayName?.split(' ')[0]}</span>
+                     {isAdmin && <span className="text-[8px] font-black text-orange-500 uppercase tracking-tighter">Admin</span>}
+                   </div>
+                   <button onClick={handleLogout} className="relative">
+                      <img 
+                        src={currentUser.photoURL || `https://ui-avatars.com/api/?name=${currentUser.displayName}&background=random`} 
+                        className="w-8 h-8 rounded-full border-2 border-white shadow-sm hover:ring-2 hover:ring-orange-200 transition-all" 
+                        alt="Profile"
+                      />
+                      <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm border border-gray-100 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <LogOut size={10} className="text-gray-400" />
+                      </div>
+                   </button>
+                </div>
+              </div>
             )}
-            <button 
-              onClick={handleAuth}
-              className={`p-2 transition-colors rounded-lg ${currentUser ? 'text-gray-900 bg-gray-50' : 'text-gray-400 hover:text-orange-500'}`}
-              title={currentUser ? "Logado como " + currentUser.displayName : "Entrar com Google"}
-            >
-              {currentUser ? <LogOut size={20} /> : <LogIn size={20} />}
-            </button>
           </div>
         </div>
       </header>
@@ -464,7 +502,15 @@ const AdminDashboard: React.FC<{ products: Product[], settings: BusinessSettings
     }
   };
 
-  if (!isAdmin) return <div className="py-20 text-center text-red-500 font-bold">Acesso restrito.</div>;
+  if (!isAdmin) return (
+    <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in duration-300">
+      <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-4">
+        <ShieldAlert size={40} />
+      </div>
+      <h2 className="text-xl font-bold text-gray-900 mb-2">Acesso Restrito</h2>
+      <p className="text-gray-500 max-w-xs text-sm">Somente administradores autorizados podem acessar o painel de gerenciamento.</p>
+    </div>
+  );
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-20">
@@ -493,7 +539,7 @@ const AdminDashboard: React.FC<{ products: Product[], settings: BusinessSettings
         <div className="space-y-6">
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-bold text-gray-900">Itens Ativos</h2>
-            <button onClick={() => setEditingProduct({})} className="bg-orange-500 text-white px-4 py-2 rounded-lg font-bold text-xs shadow-md">+ Novo Produto</button>
+            <button onClick={() => setEditingProduct({})} className="bg-orange-500 text-white px-4 py-2 rounded-lg font-bold text-xs shadow-md hover:bg-orange-600 transition-colors">+ Novo Produto</button>
           </div>
           <div className="grid grid-cols-1 gap-3">
             {products.map(p => (
@@ -507,7 +553,7 @@ const AdminDashboard: React.FC<{ products: Product[], settings: BusinessSettings
                 </div>
                 <div className="flex gap-1">
                   <button onClick={() => setEditingProduct(p)} className="p-2 text-gray-400 hover:text-orange-500 transition-colors"><Edit2 size={18} /></button>
-                  <button onClick={() => deleteProductFromDb(p.id)} className="p-2 text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={18} /></button>
+                  <button onClick={() => { if(confirm("Remover este item?")) deleteProductFromDb(p.id)}} className="p-2 text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={18} /></button>
                 </div>
               </div>
             ))}
@@ -552,8 +598,8 @@ const AdminDashboard: React.FC<{ products: Product[], settings: BusinessSettings
                  <p className="text-[10px] text-gray-500">Forçar fechamento para pausar pedidos.</p>
                </div>
              </div>
-             <button onClick={() => setTempSettings({...tempSettings, manualClosed: !tempSettings.manualClosed})} className={`w-full py-3 rounded-xl font-bold text-xs border transition-all ${tempSettings.manualClosed ? 'bg-red-500 text-white border-red-500' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
-               {tempSettings.manualClosed ? "REABRIR LOJA" : "PAUSAR AGORA"}
+             <button onClick={() => setTempSettings({...tempSettings, manualClosed: !tempSettings.manualClosed})} className={`w-full py-3 rounded-xl font-bold text-xs border transition-all ${tempSettings.manualClosed ? 'bg-red-500 text-white border-red-500 shadow-md shadow-red-100' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+               {tempSettings.manualClosed ? "REABRIR LOJA AGORA" : "PAUSAR RECEBIMENTO DE PEDIDOS"}
              </button>
           </div>
 
@@ -593,7 +639,7 @@ const AdminDashboard: React.FC<{ products: Product[], settings: BusinessSettings
               ))}
             </div>
           </div>
-          <button onClick={handleSaveSettings} disabled={saving} className="w-full py-4 bg-gray-900 text-white rounded-2xl font-bold shadow-xl flex items-center justify-center gap-2">
+          <button onClick={handleSaveSettings} disabled={saving} className="w-full py-4 bg-gray-900 text-white rounded-2xl font-bold shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all">
             {saving ? <RefreshCw className="animate-spin" size={20}/> : <CheckCircle2 size={20}/>}
             Finalizar Configurações
           </button>
@@ -605,7 +651,7 @@ const AdminDashboard: React.FC<{ products: Product[], settings: BusinessSettings
           <div className="bg-white w-full max-w-lg p-6 sm:p-8 rounded-3xl shadow-2xl space-y-6 max-h-[95vh] overflow-y-auto animate-in zoom-in-95">
              <div className="flex justify-between items-center">
                <h3 className="font-bold text-xl text-gray-900">{editingProduct.id ? 'Editar Produto' : 'Cadastrar Produto'}</h3>
-               <button onClick={() => setEditingProduct(null)} className="p-2 text-gray-400"><X size={24}/></button>
+               <button onClick={() => setEditingProduct(null)} className="p-2 text-gray-400 hover:bg-gray-100 rounded-full transition-colors"><X size={24}/></button>
              </div>
              
              <div className="flex flex-col items-center gap-2">
@@ -620,29 +666,29 @@ const AdminDashboard: React.FC<{ products: Product[], settings: BusinessSettings
              <div className="space-y-4">
                <label className="block">
                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 block">Nome do Prato</span>
-                 <input className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-500" placeholder="Ex: Marmitex Premium G" value={editingProduct.name} onChange={e => setEditingProduct({...editingProduct, name: e.target.value})} />
+                 <input className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-500" placeholder="Ex: Marmitex Premium G" value={editingProduct.name || ''} onChange={e => setEditingProduct({...editingProduct, name: e.target.value})} />
                </label>
                <div className="grid grid-cols-2 gap-4">
                  <label className="block">
-                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 block">Preço</span>
-                   <input className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-500" type="number" step="0.01" value={editingProduct.price} onChange={e => setEditingProduct({...editingProduct, price: parseFloat(e.target.value)})} />
+                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 block">Preço (R$)</span>
+                   <input className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-500" type="number" step="0.01" value={editingProduct.price || 0} onChange={e => setEditingProduct({...editingProduct, price: parseFloat(e.target.value)})} />
                  </label>
                  <label className="block">
                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 block">Categoria</span>
-                   <select className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-500" value={editingProduct.category} onChange={e => setEditingProduct({...editingProduct, category: e.target.value})}>
+                   <select className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-500" value={editingProduct.category || tempSettings.categories[0]} onChange={e => setEditingProduct({...editingProduct, category: e.target.value})}>
                      {tempSettings.categories.map(c => <option key={c} value={c}>{c}</option>)}
                    </select>
                  </label>
                </div>
                <label className="block">
                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 block">Descrição / Acompanhamentos</span>
-                 <textarea className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-500 h-24 resize-none" placeholder="O que vem nesta marmita?" value={editingProduct.description} onChange={e => setEditingProduct({...editingProduct, description: e.target.value})} />
+                 <textarea className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-500 h-24 resize-none" placeholder="O que vem nesta marmita?" value={editingProduct.description || ''} onChange={e => setEditingProduct({...editingProduct, description: e.target.value})} />
                </label>
              </div>
 
              <div className="flex gap-3">
-                <button onClick={() => setEditingProduct(null)} className="flex-1 py-4 font-bold text-gray-400 text-sm">Cancelar</button>
-                <button onClick={handleSaveProduct} disabled={saving} className="flex-[2] py-4 bg-orange-500 text-white rounded-2xl font-bold shadow-lg shadow-orange-100 flex items-center justify-center gap-2">
+                <button onClick={() => setEditingProduct(null)} className="flex-1 py-4 font-bold text-gray-400 text-sm hover:text-gray-600">Cancelar</button>
+                <button onClick={handleSaveProduct} disabled={saving} className="flex-[2] py-4 bg-orange-500 text-white rounded-2xl font-bold shadow-lg shadow-orange-100 flex items-center justify-center gap-2 active:scale-95 transition-all">
                   {saving && <RefreshCw className="animate-spin" size={16} />}
                   Salvar no Cardápio
                 </button>
