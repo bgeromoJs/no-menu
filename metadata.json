@@ -1,0 +1,7 @@
+{
+  "name": "Vera's Batatas - Menu & Pedidos",
+  "description": "Sistema de cardápio digital e gestão de pedidos para Vera's Batatas, com integração de pedidos via WhatsApp e design inspirado na identidade visual da marca.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
