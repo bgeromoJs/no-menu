@@ -28,7 +28,8 @@ import {
   AlertTriangle,
   CheckCircle2,
   Truck,
-  Check
+  Check,
+  Download
 } from 'lucide-react';
 import { Product, CartItem, ViewMode, BusinessSettings } from './types';
 import { ADMIN_PHONE, WEEK_DAYS, DEFAULT_SETTINGS } from './constants';
@@ -58,7 +59,6 @@ const parseJwt = (token: string) => {
   }
 };
 
-// Função aprimorada para redimensionar e converter imagem para Base64 leve
 const compressAndEncodeImage = (file: File, maxWidth = 600): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -112,6 +112,10 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [checkoutStep, setCheckoutStep] = useState(0);
   
+  // PWA Install Prompt
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showInstallPopup, setShowInstallPopup] = useState(false);
+  
   const googleBtnContainerRef = useRef<HTMLDivElement>(null);
   const gsiInitialized = useRef(false);
 
@@ -120,6 +124,77 @@ export default function App() {
     address: '',
     paymentMethod: 'Pix' as 'Pix' | 'Cartão' | 'Dinheiro'
   });
+
+  // Listener para instalação do PWA
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      // Mostra o popup após 5 segundos se o app ainda não estiver instalado
+      setTimeout(() => setShowInstallPopup(true), 5000);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      console.log('Usuário aceitou a instalação');
+    }
+    setDeferredPrompt(null);
+    setShowInstallPopup(false);
+  };
+
+  // Efeito para sincronizar Manifesto, Favicon e Apple Icon com os dados da loja
+  useEffect(() => {
+    const shopLogo = settings.photoUrl || "https://cdn-icons-png.flaticon.com/512/1046/1046857.png";
+    const shopName = settings.name || "Vera Marmitex";
+
+    const favicon = document.getElementById('dynamic-favicon') as HTMLLinkElement;
+    const appleIcon = document.getElementById('dynamic-apple-icon') as HTMLLinkElement;
+    if (favicon) favicon.href = shopLogo;
+    if (appleIcon) appleIcon.href = shopLogo;
+    document.title = shopName;
+
+    const dynamicManifest = {
+      "name": shopName,
+      "short_name": shopName.split(' ')[0],
+      "description": `Cardápio Digital - ${shopName}`,
+      "start_url": ".",
+      "display": "standalone",
+      "background_color": "#ffffff",
+      "theme_color": "#f97316",
+      "orientation": "portrait",
+      "icons": [
+        {
+          "src": shopLogo,
+          "sizes": "192x192",
+          "type": "image/png",
+          "purpose": "any maskable"
+        },
+        {
+          "src": shopLogo,
+          "sizes": "512x512",
+          "type": "image/png"
+        }
+      ]
+    };
+
+    const stringManifest = JSON.stringify(dynamicManifest);
+    const blob = new Blob([stringManifest], {type: 'application/json'});
+    const manifestURL = URL.createObjectURL(blob);
+    
+    const manifestLink = document.getElementById('pwa-manifest') as HTMLLinkElement;
+    if (manifestLink) {
+      manifestLink.setAttribute('href', manifestURL);
+    }
+
+    return () => URL.revokeObjectURL(manifestURL);
+  }, [settings.photoUrl, settings.name]);
 
   const handleLoginResponse = async (response: any) => {
     const payload = parseJwt(response.credential);
@@ -273,7 +348,6 @@ export default function App() {
     const itemsList = cart.map(item => `${item.quantity}x ${item.product.name}${item.observations ? ` (Obs: ${item.observations})` : ''}`).join('\n');
     const destinationPhone = settings.whatsappPhone || ADMIN_PHONE;
     
-    // Substituição de emojis por tópicos (•) para compatibilidade total
     const messageLines = [
       `*NOVO PEDIDO - ${settings.name}*`,
       "",
@@ -430,6 +504,31 @@ export default function App() {
           <AdminDashboard products={products} settings={settings} />
         )}
       </main>
+
+      {/* Popup de Instalação Discreto */}
+      {showInstallPopup && deferredPrompt && viewMode === ViewMode.CUSTOMER && (
+        <div className="fixed bottom-24 inset-x-4 z-[60] animate-in slide-in-from-bottom duration-500">
+           <div className="max-w-md mx-auto bg-white rounded-2xl shadow-2xl border border-gray-100 p-3 sm:p-4 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                 <div className="w-10 h-10 sm:w-12 sm:h-12 bg-orange-500 rounded-xl flex items-center justify-center text-white flex-shrink-0">
+                    {settings.photoUrl ? (
+                      <img src={settings.photoUrl} className="w-full h-full object-cover rounded-xl" alt="Logo" />
+                    ) : (
+                      <Download size={20} />
+                    )}
+                 </div>
+                 <div className="overflow-hidden">
+                    <p className="text-[10px] sm:text-xs font-black text-gray-900 truncate">Instale o App do {settings.name || 'Vera'}</p>
+                    <p className="text-[9px] sm:text-[10px] text-gray-500 leading-tight">Peça mais rápido direto da tela inicial.</p>
+                 </div>
+              </div>
+              <div className="flex items-center gap-1.5">
+                 <button onClick={() => setShowInstallPopup(false)} className="p-2 text-gray-300 hover:text-gray-500 transition-colors"><X size={16}/></button>
+                 <button onClick={handleInstallClick} className="bg-gray-900 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[9px] sm:text-xs font-bold shadow-lg shadow-gray-200 hover:bg-black transition-all">Instalar</button>
+              </div>
+           </div>
+        </div>
+      )}
 
       {cartItemCount > 0 && shopStatus.open && viewMode === ViewMode.CUSTOMER && (
         <div className="fixed bottom-0 inset-x-0 p-3 sm:p-4 bg-white/80 backdrop-blur-md border-t border-gray-100 z-50">
