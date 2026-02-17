@@ -124,18 +124,17 @@ export default function App() {
 
   // Registro do Service Worker e Eventos PWA
   useEffect(() => {
-    // 1. Registrar Service Worker via React para evitar 404 fora do escopo
+    // Registro usando caminho absoluto para garantir visibilidade no build (pasta public)
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js')
-        .then(reg => console.log('SW registrado via React:', reg.scope))
-        .catch(err => console.error('Erro ao registrar SW via React:', err));
+      navigator.serviceWorker.register('/sw.js')
+        .then(reg => console.log('SW registrado com sucesso na raiz:', reg.scope))
+        .catch(err => console.error('Erro ao registrar SW (Verifique se o arquivo está em /public):', err));
     }
 
-    // 2. Capturar evento de instalação
     const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      // Exibir popup sutil após carregar o menu
+      // Exibir popup sutil após 3 segundos se o menu estiver carregado
       if (!loadingMenu) {
         setTimeout(() => setShowInstallPopup(true), 3000);
       }
@@ -169,7 +168,7 @@ export default function App() {
       "name": shopName,
       "short_name": shopName.split(' ')[0],
       "description": `Cardápio Digital - ${shopName}`,
-      "start_url": ".",
+      "start_url": "/",
       "display": "standalone",
       "background_color": "#ffffff",
       "theme_color": "#f97316",
