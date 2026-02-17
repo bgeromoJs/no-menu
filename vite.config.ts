@@ -1,12 +1,12 @@
 
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
-// Use the named export 'cwd' from 'node:process' to avoid type resolution issues often encountered with the 'process' global or its default export in Node.js TypeScript environments.
-import { cwd } from 'node:process';
+// Import 'process' from 'node:process' to use process.cwd(), as named exports from built-in modules can sometimes encounter type resolution issues in specific TypeScript environments.
+import process from 'node:process';
 
 export default defineConfig(({ mode }) => {
-  // Access the current working directory using the specifically imported and correctly typed 'cwd' function instead of the 'process' object.
-  const env = loadEnv(mode, cwd(), '');
+  // Access the current working directory using process.cwd() to reliably load environment variables from the project root.
+  const env = loadEnv(mode, process.cwd(), '');
   return {
     plugins: [react()],
     define: {

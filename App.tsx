@@ -66,6 +66,7 @@ export default function App() {
   const [isInitializing, setIsInitializing] = useState(true);
   const [user, setUser] = useState<{ email: string, name: string, picture: string } | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [googleBtnLoaded, setGoogleBtnLoaded] = useState(false);
   
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.CUSTOMER);
   const [products, setProducts] = useState<Product[]>([]);
@@ -84,6 +85,35 @@ export default function App() {
     paymentMethod: 'Pix' as 'Pix' | 'Cartão' | 'Dinheiro'
   });
 
+  const handleLoginResponse = async (response: any) => {
+    const payload = parseJwt(response.credential);
+    if (payload) {
+      const userData = {
+        email: payload.email,
+        name: payload.name,
+        picture: payload.picture
+      };
+      setUser(userData);
+      localStorage.setItem('user_session', JSON.stringify(userData));
+      const admin = await checkAdminStatus(userData.email);
+      setIsAdmin(admin);
+      await syncUser(userData);
+    }
+  };
+
+  const forceGoogleLogin = () => {
+    if (typeof google !== 'undefined') {
+      // Força a exibição do prompt do Google, ignorando supressões anteriores se possível
+      google.accounts.id.prompt((notification: any) => {
+        if (notification.isNotDisplayed()) {
+          console.warn("Prompt suprimido:", notification.getNotDisplayedReason());
+          // Se o prompt automático falhou, o botão oficial é a única saída
+          alert("Por favor, clique no botão 'Entrar com Google' que apareceu no topo.");
+        }
+      });
+    }
+  };
+
   // Inicialização do Google Login
   useEffect(() => {
     const savedUser = localStorage.getItem('user_session');
@@ -97,42 +127,40 @@ export default function App() {
       if (typeof google !== 'undefined') {
         google.accounts.id.initialize({
           client_id: process.env.GOOGLE_CLIENT_ID,
-          callback: async (response: any) => {
-            const payload = parseJwt(response.credential);
-            if (payload) {
-              const userData = {
-                email: payload.email,
-                name: payload.name,
-                picture: payload.picture
-              };
-              setUser(userData);
-              localStorage.setItem('user_session', JSON.stringify(userData));
-              const admin = await checkAdminStatus(userData.email);
-              setIsAdmin(admin);
-              await syncUser(userData);
-            }
-          }
+          callback: handleLoginResponse,
+          auto_select: false,
+          cancel_on_tap_outside: false
         });
 
-        // Tenta mostrar o One Tap (pode ser suprimido pelo Google se o usuário fechou antes)
+        // Tenta mostrar o One Tap automaticamente
         google.accounts.id.prompt();
 
-        // Renderiza o botão fixo que NUNCA é suprimido no clique
-        if (googleBtnContainerRef.current) {
-          google.accounts.id.renderButton(googleBtnContainerRef.current, {
-            theme: 'outline',
-            size: 'medium',
-            shape: 'pill',
-            text: 'signin_with',
-            locale: 'pt-BR'
-          });
-        }
+        // Tenta renderizar o botão imediatamente se o container existir
+        renderGoogleButton();
       } else {
         setTimeout(initGsi, 500);
       }
     };
+
+    const renderGoogleButton = () => {
+      if (googleBtnContainerRef.current && typeof google !== 'undefined' && !user) {
+        google.accounts.id.renderButton(googleBtnContainerRef.current, {
+          theme: 'outline',
+          size: 'medium',
+          shape: 'pill',
+          text: 'signin_with',
+          locale: 'pt-BR',
+          width: 180
+        });
+        setGoogleBtnLoaded(true);
+      } else if (!user) {
+        // Se o container ainda não estiver no DOM, tenta novamente em breve
+        setTimeout(renderGoogleButton, 300);
+      }
+    };
+
     initGsi();
-  }, [user]); // Re-inicializa se o user mudar para garantir que o container do botão seja populado se necessário
+  }, [user]);
 
   useEffect(() => {
     const unsubProducts = subscribeProducts((p) => {
@@ -168,6 +196,7 @@ export default function App() {
     setIsAdmin(false);
     setViewMode(ViewMode.CUSTOMER);
     localStorage.removeItem('user_session');
+    setGoogleBtnLoaded(false);
   };
 
   const addToCart = (product: Product) => {
@@ -238,9 +267,19 @@ export default function App() {
                 <button onClick={handleLogout} className="text-gray-400 hover:text-red-500 transition-colors p-1"><LogOut size={16}/></button>
               </div>
             ) : (
-              <div className="flex items-center">
-                 {/* O botão oficial do Google será injetado aqui. Ele ignora a supressão de clique. */}
-                 <div ref={googleBtnContainerRef} className="h-8 sm:h-9 overflow-hidden rounded-full border border-gray-200 shadow-sm"></div>
+              <div className="flex items-center gap-2">
+                 {/* Botão de Fallback Customizado: Sempre visível e clicável se o Google falhar */}
+                 {!googleBtnLoaded && (
+                   <button 
+                     onClick={forceGoogleLogin}
+                     className="flex items-center gap-1.5 bg-white text-gray-600 px-3 py-1.5 rounded-full text-[10px] sm:text-xs font-bold border border-gray-200 hover:bg-gray-50 transition-all shadow-sm"
+                   >
+                     <LogIn size={14} className="text-orange-500" />
+                     <span>Acessar</span>
+                   </button>
+                 )}
+                 {/* Container oficial do Google: O SDK injeta o botão aqui */}
+                 <div ref={googleBtnContainerRef} className={`h-8 sm:h-9 overflow-hidden rounded-full ${!googleBtnLoaded ? 'w-0 opacity-0' : 'opacity-100 transition-opacity duration-300'}`}></div>
               </div>
             )}
           </div>
@@ -492,7 +531,6 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* Botão de Status da Loja */}
       <div className="animate-in fade-in slide-in-from-top-4 duration-700">
         <div className="bg-white rounded-2xl p-4 sm:p-5 border border-gray-100 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
            <div className="flex items-center gap-4 text-center sm:text-left">
