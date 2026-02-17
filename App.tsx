@@ -26,7 +26,8 @@ import {
   ArrowRight,
   Phone,
   AlertTriangle,
-  CheckCircle2
+  CheckCircle2,
+  Truck
 } from 'lucide-react';
 import { Product, CartItem, ViewMode, BusinessSettings } from './types';
 import { ADMIN_PHONE, WEEK_DAYS, DEFAULT_SETTINGS } from './constants';
@@ -245,7 +246,25 @@ export default function App() {
   const handleCheckout = () => {
     const itemsList = cart.map(item => `${item.quantity}x ${item.product.name}${item.observations ? ` (Obs: ${item.observations})` : ''}`).join('\n');
     const destinationPhone = settings.whatsappPhone || ADMIN_PHONE;
-    const message = encodeURIComponent(`*NOVO PEDIDO - ${settings.name}*\n\n👤 Cliente: ${customerInfo.name}\n📍 Endereço: ${customerInfo.address}\n💳 Pagamento: ${customerInfo.paymentMethod}\n\n🍱 Itens:\n${itemsList}\n\n💰 Total: R$ ${cartTotal.toFixed(2)}`);
+    
+    // Formatando mensagem com emojis padrão para evitar erros de codificação
+    const messageLines = [
+      `*NOVO PEDIDO - ${settings.name}*`,
+      "",
+      `👤 *Cliente:* ${customerInfo.name}`,
+      `📍 *Endereço:* ${customerInfo.address}`,
+      `💳 *Pagamento:* ${customerInfo.paymentMethod}`,
+      "",
+      "🍱 *Itens:*",
+      itemsList,
+      "",
+      `💰 *Subtotal:* R$ ${cartTotal.toFixed(2)}`,
+      `🚚 *Frete:* A calcular via WhatsApp`,
+      "",
+      "_O valor final com frete será confirmado a seguir._"
+    ];
+
+    const message = encodeURIComponent(messageLines.join('\n'));
     window.open(`https://wa.me/${destinationPhone}?text=${message}`, '_blank');
     setCart([]); setCheckoutStep(0); setIsCartOpen(false);
   };
@@ -446,9 +465,17 @@ export default function App() {
                 )}
              </div>
              <div className="p-4 sm:p-6 bg-gray-50 border-t">
-                <div className="flex justify-between items-center mb-3 sm:mb-4">
-                   <span className="text-[10px] sm:text-sm text-gray-500 font-medium">Total</span>
-                   <span className="text-base sm:text-xl font-black text-gray-900">R$ {cartTotal.toFixed(2)}</span>
+                <div className="flex flex-col mb-3 sm:mb-4">
+                  <div className="flex justify-between items-center">
+                     <span className="text-[10px] sm:text-sm text-gray-500 font-medium">Subtotal</span>
+                     <span className="text-base sm:text-xl font-black text-gray-900">R$ {cartTotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-2 bg-orange-50 p-2 rounded-lg border border-orange-100">
+                     <Truck size={14} className="text-orange-500 flex-shrink-0" />
+                     <p className="text-[9px] sm:text-[10px] text-orange-700 leading-tight italic">
+                       * O valor do frete será calculado e informado no WhatsApp.
+                     </p>
+                  </div>
                 </div>
                 <button 
                   onClick={checkoutStep === 0 ? () => setCheckoutStep(1) : handleCheckout}
