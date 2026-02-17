@@ -273,23 +273,23 @@ export default function App() {
     const itemsList = cart.map(item => `${item.quantity}x ${item.product.name}${item.observations ? ` (Obs: ${item.observations})` : ''}`).join('\n');
     const destinationPhone = settings.whatsappPhone || ADMIN_PHONE;
     
-    // Construção robusta da mensagem com emojis nativos
+    // Substituição de emojis por tópicos (•) para compatibilidade total
     const messageLines = [
       `*NOVO PEDIDO - ${settings.name}*`,
       "",
-      `👤 *Cliente:* ${customerInfo.name}`,
-      `📍 *Endereço:* ${customerInfo.address}`,
-      `💳 *Pagamento:* ${customerInfo.paymentMethod}`,
+      `• *Cliente:* ${customerInfo.name}`,
+      `• *Endereço:* ${customerInfo.address}`,
+      `• *Pagamento:* ${customerInfo.paymentMethod}`,
       "",
-      "🍱 *Itens:*",
+      "• *Itens:*",
       itemsList,
       "",
-      `💰 *Subtotal:* R$ ${cartTotal.toFixed(2)}`,
-      `🚚 *Frete:* A calcular via WhatsApp`,
+      `• *Subtotal:* R$ ${cartTotal.toFixed(2)}`,
+      `• *Frete:* A calcular via WhatsApp`,
       "",
-      "✅ *Aguarde! Seu pedido será confirmado por nossa equipe aqui no WhatsApp.*",
+      "• *Confirmação:* Aguarde! Seu pedido será confirmado por nossa equipe aqui no WhatsApp.",
       "",
-      "_Enviado via Cardápio Online Vera's Batatas_"
+      "_O valor final com frete será informado a seguir._"
     ];
 
     const message = encodeURIComponent(messageLines.join('\n'));
