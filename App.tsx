@@ -124,33 +124,34 @@ export default function App() {
 
   // Registro do Service Worker e Eventos PWA
   useEffect(() => {
-    // Registro usando caminho absoluto para garantir visibilidade no build (pasta public)
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js')
-        .then(reg => console.log('SW registrado com sucesso na raiz:', reg.scope))
-        .catch(err => console.error('Erro ao registrar SW (Verifique se o arquivo está em /public):', err));
+      // Registrar sempre da raiz para escopo total
+      navigator.serviceWorker.register('/sw.js', { scope: '/' })
+        .then(reg => console.log('SW registrado (Raiz):', reg.scope))
+        .catch(err => console.error('Erro SW:', err));
     }
 
     const handleBeforeInstallPrompt = (e: any) => {
+      console.log('Evento beforeinstallprompt disparado!');
       e.preventDefault();
       setDeferredPrompt(e);
-      // Exibir popup sutil após 3 segundos se o menu estiver carregado
-      if (!loadingMenu) {
-        setTimeout(() => setShowInstallPopup(true), 3000);
-      }
+      // Popup sutil após 4 segundos se já carregou os dados básicos
+      setTimeout(() => setShowInstallPopup(true), 4000);
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-  }, [loadingMenu]);
+  }, []);
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
     console.log(`Resultado da instalação: ${outcome}`);
-    setDeferredPrompt(null);
-    setShowInstallPopup(false);
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
+      setShowInstallPopup(false);
+    }
   };
 
   // Efeito para sincronizar Manifesto, Favicon e Apple Icon com os dados da loja
@@ -164,11 +165,13 @@ export default function App() {
     if (appleIcon) appleIcon.href = shopLogo;
     document.title = shopName;
 
+    // A start_url precisa ser absoluta quando o manifesto é um Blob URL
     const dynamicManifest = {
       "name": shopName,
       "short_name": shopName.split(' ')[0],
       "description": `Cardápio Digital - ${shopName}`,
-      "start_url": "/",
+      "start_url": window.location.origin + "/",
+      "scope": "/",
       "display": "standalone",
       "background_color": "#ffffff",
       "theme_color": "#f97316",
