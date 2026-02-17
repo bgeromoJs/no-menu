@@ -1,11 +1,8 @@
 
 import { initializeApp, getApps, getApp, FirebaseApp } from "@firebase/app";
 import { getFirestore, collection, setDoc, doc, getDoc, deleteDoc, onSnapshot, Firestore } from "@firebase/firestore";
-import { getAuth, GoogleAuthProvider, signInWithCredential, onAuthStateChanged, signOut, Auth } from "@firebase/auth";
-import { Product, BusinessSettings, UserProfile } from "../types";
+import { Product, BusinessSettings } from "../types";
 import { INITIAL_PRODUCTS, DEFAULT_SETTINGS } from "../constants";
-
-declare var google: any;
 
 const firebaseConfig = {
   apiKey: process.env.FIREBASE_API_KEY,
@@ -16,132 +13,34 @@ const firebaseConfig = {
   appId: process.env.FIREBASE_APP_ID
 };
 
-const initFirebase = (): { app: FirebaseApp | null, db: Firestore | null, auth: Auth | null } => {
+const initFirebase = (): { app: FirebaseApp | null, db: Firestore | null } => {
   try {
     const apps = getApps();
     if (apps.length > 0) {
       const app = getApp();
-      return { app, db: getFirestore(app), auth: getAuth(app) };
+      return { app, db: getFirestore(app) };
     }
     
     if (!firebaseConfig.apiKey) {
-      console.warn("Firebase não configurado com chaves individuais. Entrando em modo Mock.");
-      return { app: null, db: null, auth: null };
+      console.warn("Firebase não configurado. Entrando em modo Mock (LocalStorage).");
+      return { app: null, db: null };
     }
     
     const app = initializeApp(firebaseConfig);
-    return { app, db: getFirestore(app), auth: getAuth(app) };
+    return { app, db: getFirestore(app) };
   } catch (e) {
     console.error("Erro Crítico Firebase:", e);
-    return { app: null, db: null, auth: null };
+    return { app: null, db: null };
   }
 };
 
-const { db, auth } = initFirebase();
-export { db, auth };
+const { db } = initFirebase();
+export { db };
 
 const PRODUCTS_COL = "products";
 const SETTINGS_COL = "settings";
-const USERS_COL = "users";
 
-const isMockMode = !db || !auth;
-
-const syncUserToDb = async (user: any) => {
-  if (isMockMode || !db) return;
-  try {
-    const userRef = doc(db, USERS_COL, user.email);
-    const snap = await getDoc(userRef);
-    if (!snap.exists()) {
-      await setDoc(userRef, {
-        uid: user.uid,
-        name: user.displayName || "Usuário",
-        email: user.email,
-        isAdmin: false,
-        createdAt: new Date().toISOString()
-      });
-    }
-  } catch (e) {
-    console.error("Erro ao sincronizar usuário:", e);
-  }
-};
-
-export const loginWithGoogle = async (): Promise<any | null> => {
-  if (isMockMode) {
-    const mockUser = { 
-      uid: "admin-test", 
-      displayName: "Vera Admin (Mock)", 
-      email: "admin@teste.com",
-      photoURL: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
-    };
-    localStorage.setItem("mock_user", JSON.stringify(mockUser));
-    window.dispatchEvent(new Event('auth_change'));
-    return mockUser;
-  }
-
-  return new Promise((resolve, reject) => {
-    try {
-      google.accounts.id.initialize({
-        client_id: process.env.GOOGLE_CLIENT_ID,
-        callback: async (response: any) => {
-          try {
-            const credential = GoogleAuthProvider.credential(response.credential);
-            const result = await signInWithCredential(auth!, credential);
-            await syncUserToDb(result.user);
-            resolve(result.user);
-          } catch (error) {
-            reject(error);
-          }
-        }
-      });
-      google.accounts.id.prompt();
-    } catch (error) {
-      reject(error);
-    }
-  });
-};
-
-export const logout = async () => {
-  if (isMockMode) {
-    localStorage.removeItem("mock_user");
-    window.dispatchEvent(new Event('auth_change'));
-    return;
-  }
-  if (auth) await signOut(auth);
-};
-
-export const subscribeAuth = (callback: (user: any | null) => void) => {
-  if (isMockMode) {
-    const check = () => callback(JSON.parse(localStorage.getItem("mock_user") || 'null'));
-    window.addEventListener('auth_change', check);
-    check();
-    return () => window.removeEventListener('auth_change', check);
-  }
-  if (!auth) return () => {};
-  return onAuthStateChanged(auth, (user) => {
-    if (user) {
-      callback({
-        uid: user.uid,
-        email: user.email,
-        name: user.displayName,
-        photoURL: user.photoURL
-      });
-    } else {
-      callback(null);
-    }
-  });
-};
-
-export const checkAdminStatus = async (email: string): Promise<boolean> => {
-  if (!email) return false;
-  if (isMockMode) return email === "admin@teste.com";
-  if (!db) return false;
-  try {
-    const snap = await getDoc(doc(db, USERS_COL, email));
-    return snap.exists() ? snap.data().isAdmin === true : false;
-  } catch (e) {
-    return false;
-  }
-};
+const isMockMode = !db;
 
 export const subscribeProducts = (callback: (products: Product[]) => void) => {
   if (isMockMode || !db) {
@@ -151,7 +50,13 @@ export const subscribeProducts = (callback: (products: Product[]) => void) => {
     window.addEventListener('storage', h);
     return () => window.removeEventListener('storage', h);
   }
-  return onSnapshot(collection(db, PRODUCTS_COL), (snap) => callback(snap.docs.map(d => d.data() as Product)));
+  return onSnapshot(collection(db, PRODUCTS_COL), (snap) => {
+    if (snap.empty) {
+      callback(INITIAL_PRODUCTS);
+    } else {
+      callback(snap.docs.map(d => d.data() as Product));
+    }
+  });
 };
 
 export const saveProductToDb = async (p: Product) => {

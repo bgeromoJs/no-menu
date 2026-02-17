@@ -40,11 +40,7 @@ import {
   saveProductToDb, 
   deleteProductFromDb,
   subscribeSettings,
-  saveSettings,
-  checkAdminStatus,
-  loginWithGoogle,
-  logout,
-  subscribeAuth
+  saveSettings
 } from './services/firebaseService';
 
 const fileToBase64 = (file: File): Promise<string> => {
@@ -58,10 +54,6 @@ const fileToBase64 = (file: File): Promise<string> => {
 
 export default function App() {
   const [isInitializing, setIsInitializing] = useState(true);
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
-  
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.CUSTOMER);
   const [products, setProducts] = useState<Product[]>([]);
   const [settings, setSettings] = useState<BusinessSettings>(DEFAULT_SETTINGS);
@@ -78,23 +70,10 @@ export default function App() {
   });
 
   useEffect(() => {
-    const unsubAuth = subscribeAuth(async (user) => {
-      if (user) {
-        setCurrentUser(user);
-        const admin = await checkAdminStatus(user.email);
-        setIsAdmin(admin);
-      } else {
-        setCurrentUser(null);
-        setIsAdmin(false);
-        setViewMode(ViewMode.CUSTOMER);
-      }
+    const unsubProducts = subscribeProducts((p) => {
+      setProducts(p);
       setIsInitializing(false);
     });
-    return () => unsubAuth();
-  }, []);
-
-  useEffect(() => {
-    const unsubProducts = subscribeProducts(setProducts);
     const unsubSettings = subscribeSettings((s) => {
       setSettings(s);
       if (s.categories?.length > 0 && !selectedCategory) setSelectedCategory(s.categories[0]);
@@ -118,18 +97,6 @@ export default function App() {
 
   const cartTotal = useMemo(() => cart.reduce((acc, item) => acc + (item.product.price * item.quantity), 0), [cart]);
   const cartItemCount = useMemo(() => cart.reduce((a, b) => a + b.quantity, 0), [cart]);
-
-  const handleLogin = async () => {
-    setIsLoggingIn(true);
-    try {
-      await loginWithGoogle();
-    } catch (e) {
-      console.error(e);
-      alert("Erro ao realizar login via Google.");
-    } finally {
-      setIsLoggingIn(false);
-    }
-  };
 
   const addToCart = (product: Product) => {
     if (!shopStatus.open) return;
@@ -166,7 +133,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
-      <header className="bg-white border-b border-gray-100 sticky top-0 z-50 px-3 py-3">
+      <header className="bg-white border-b border-gray-100 sticky top-0 z-50 px-3 py-3 shadow-sm">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-3">
              {settings.photoUrl ? (
@@ -184,32 +151,12 @@ export default function App() {
           </div>
           
           <div className="flex items-center gap-1.5 sm:gap-3">
-            {isAdmin && (
-              <button 
-                onClick={() => setViewMode(prev => prev === ViewMode.CUSTOMER ? ViewMode.ADMIN : ViewMode.CUSTOMER)}
-                className={`flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-lg text-[9px] sm:text-xs font-bold transition-all ${viewMode === ViewMode.ADMIN ? 'bg-orange-500 text-white shadow-lg shadow-orange-100' : 'bg-orange-50 text-orange-600'}`}
-              >
-                {viewMode === ViewMode.CUSTOMER ? <><LayoutDashboard size={12} /> <span className="hidden xs:inline">Painel</span></> : <><Utensils size={12} /> <span className="hidden xs:inline">Cardápio</span></>}
-              </button>
-            )}
-
-            {currentUser ? (
-              <div className="flex items-center gap-1.5">
-                <img src={currentUser.photoURL} className="w-6 h-6 sm:w-8 sm:h-8 rounded-full border border-gray-100" alt="Perfil" />
-                <button onClick={() => confirm("Deseja sair?") && logout()} className="text-gray-400 hover:text-red-500 transition-colors">
-                  <LogOut size={14} />
-                </button>
-              </div>
-            ) : (
-              <button 
-                onClick={handleLogin}
-                disabled={isLoggingIn}
-                className="flex items-center gap-1.5 bg-orange-500 text-white px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[9px] sm:text-xs font-bold hover:bg-orange-600 transition-all disabled:opacity-50"
-              >
-                {isLoggingIn ? <RefreshCw size={12} className="animate-spin" /> : <LogIn size={12} />}
-                <span>Entrar</span>
-              </button>
-            )}
+            <button 
+              onClick={() => setViewMode(prev => prev === ViewMode.CUSTOMER ? ViewMode.ADMIN : ViewMode.CUSTOMER)}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all border shadow-sm ${viewMode === ViewMode.ADMIN ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-200 hover:border-orange-200'}`}
+            >
+              {viewMode === ViewMode.CUSTOMER ? <><LayoutDashboard size={14} /> <span>Painel</span></> : <><Utensils size={14} /> <span>Cardápio</span></>}
+            </button>
           </div>
         </div>
       </header>
@@ -284,7 +231,7 @@ export default function App() {
             </div>
           </div>
         ) : (
-          <AdminDashboard products={products} settings={settings} isAdmin={isAdmin} />
+          <AdminDashboard products={products} settings={settings} />
         )}
       </main>
 
@@ -370,7 +317,7 @@ export default function App() {
   );
 }
 
-function AdminDashboard({ products, settings, isAdmin }: { products: Product[], settings: BusinessSettings, isAdmin: boolean }) {
+function AdminDashboard({ products, settings }: { products: Product[], settings: BusinessSettings }) {
   const [activeTab, setActiveTab] = useState<'menu' | 'settings' | 'hours' | 'categories'>('menu');
   const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null);
   const [tempSettings, setTempSettings] = useState<BusinessSettings>(settings);
@@ -448,17 +395,9 @@ function AdminDashboard({ products, settings, isAdmin }: { products: Product[], 
     await handleSaveSettings(updated);
   };
 
-  if (!isAdmin) return (
-    <div className="p-8 text-center flex flex-col items-center justify-center min-h-[40vh]">
-      <ShieldAlert className="mb-3 text-red-500" size={40} />
-      <h2 className="font-bold text-gray-900 text-sm">Acesso Restrito</h2>
-      <p className="text-gray-400 text-[10px] sm:text-xs">Identificamos que você não tem permissão para administrar.</p>
-    </div>
-  );
-
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* Botão de Status da Loja - Redesenhado para ser Clean e Moderno */}
+      {/* Botão de Status da Loja */}
       <div className="animate-in fade-in slide-in-from-top-4 duration-700">
         <div className="bg-white rounded-2xl p-4 sm:p-5 border border-gray-100 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
            <div className="flex items-center gap-4 text-center sm:text-left">
@@ -508,7 +447,7 @@ function AdminDashboard({ products, settings, isAdmin }: { products: Product[], 
               <button onClick={() => setEditingProduct({ available: true, category: tempSettings.categories[0] })} className="bg-orange-500 text-white px-2.5 sm:px-4 py-1.5 rounded-lg text-[9px] sm:text-xs font-bold shadow-md shadow-orange-50 hover:bg-orange-600">+ Novo</button>
             </div>
             <div className="grid gap-2">
-              {products.length === 0 && <div className="p-8 text-center bg-white rounded-xl border border-dashed border-gray-200 text-gray-400 text-[9px] sm:text-xs">Nenhum prato.</div>}
+              {products.length === 0 && <div className="p-8 text-center bg-white rounded-xl border border-dashed border-gray-200 text-gray-400 text-[9px] sm:text-xs">Nenhum prato cadastrado.</div>}
               {products.map(p => (
                 <div key={p.id} className="bg-white p-2.5 sm:p-4 rounded-xl flex items-center justify-between border border-gray-100 shadow-sm">
                   <div className="flex items-center gap-2.5 sm:gap-4 overflow-hidden">
