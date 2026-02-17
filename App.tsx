@@ -27,7 +27,8 @@ import {
   Phone,
   AlertTriangle,
   CheckCircle2,
-  Truck
+  Truck,
+  Check
 } from 'lucide-react';
 import { Product, CartItem, ViewMode, BusinessSettings } from './types';
 import { ADMIN_PHONE, WEEK_DAYS, DEFAULT_SETTINGS } from './constants';
@@ -57,12 +58,42 @@ const parseJwt = (token: string) => {
   }
 };
 
-const fileToBase64 = (file: File): Promise<string> => {
+// Função aprimorada para redimensionar e converter imagem para Base64 leve
+const compressAndEncodeImage = (file: File, maxWidth = 600): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = error => reject(error);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height *= maxWidth / width;
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxWidth) {
+            width *= maxWidth / height;
+            height = maxWidth;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return reject('Erro ao criar contexto do canvas');
+        
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
+      };
+      img.onerror = (err) => reject(err);
+    };
+    reader.onerror = (err) => reject(err);
   });
 };
 
@@ -129,7 +160,6 @@ export default function App() {
 
     const initGsi = () => {
       if (gsiInitialized.current) return;
-      
       if (typeof google !== 'undefined') {
         google.accounts.id.initialize({
           client_id: process.env.GOOGLE_CLIENT_ID,
@@ -137,13 +167,10 @@ export default function App() {
           auto_select: false,
           itp_support: true
         });
-
         gsiInitialized.current = true;
-        
         if (!localStorage.getItem('user_session')) {
           google.accounts.id.prompt();
         }
-
         renderGoogleButton();
       } else {
         setTimeout(initGsi, 500);
@@ -165,7 +192,6 @@ export default function App() {
         setTimeout(renderGoogleButton, 300);
       }
     };
-
     initGsi();
   }, []);
 
@@ -247,7 +273,7 @@ export default function App() {
     const itemsList = cart.map(item => `${item.quantity}x ${item.product.name}${item.observations ? ` (Obs: ${item.observations})` : ''}`).join('\n');
     const destinationPhone = settings.whatsappPhone || ADMIN_PHONE;
     
-    // Formatando mensagem com emojis padrão para evitar erros de codificação
+    // Construção robusta da mensagem com emojis nativos
     const messageLines = [
       `*NOVO PEDIDO - ${settings.name}*`,
       "",
@@ -261,7 +287,9 @@ export default function App() {
       `💰 *Subtotal:* R$ ${cartTotal.toFixed(2)}`,
       `🚚 *Frete:* A calcular via WhatsApp`,
       "",
-      "_O valor final com frete será confirmado a seguir._"
+      "✅ *Aguarde! Seu pedido será confirmado por nossa equipe aqui no WhatsApp.*",
+      "",
+      "_Enviado via Cardápio Online Vera's Batatas_"
     ];
 
     const message = encodeURIComponent(messageLines.join('\n'));
@@ -465,16 +493,26 @@ export default function App() {
                 )}
              </div>
              <div className="p-4 sm:p-6 bg-gray-50 border-t">
-                <div className="flex flex-col mb-3 sm:mb-4">
+                <div className="flex flex-col mb-3 sm:mb-4 space-y-2">
                   <div className="flex justify-between items-center">
                      <span className="text-[10px] sm:text-sm text-gray-500 font-medium">Subtotal</span>
                      <span className="text-base sm:text-xl font-black text-gray-900">R$ {cartTotal.toFixed(2)}</span>
                   </div>
-                  <div className="flex items-center gap-1.5 mt-2 bg-orange-50 p-2 rounded-lg border border-orange-100">
-                     <Truck size={14} className="text-orange-500 flex-shrink-0" />
-                     <p className="text-[9px] sm:text-[10px] text-orange-700 leading-tight italic">
-                       * O valor do frete será calculado e informado no WhatsApp.
-                     </p>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-1.5 bg-orange-50 p-2 rounded-lg border border-orange-100">
+                       <Truck size={14} className="text-orange-500 flex-shrink-0" />
+                       <p className="text-[9px] sm:text-[10px] text-orange-700 leading-tight italic">
+                         * O valor do frete será calculado e informado no WhatsApp.
+                       </p>
+                    </div>
+                    {checkoutStep === 1 && (
+                      <div className="flex items-center gap-1.5 bg-blue-50 p-2 rounded-lg border border-blue-100">
+                         <Check size={14} className="text-blue-500 flex-shrink-0" />
+                         <p className="text-[9px] sm:text-[10px] text-blue-700 leading-tight italic font-bold">
+                           * Seu pedido será analisado e confirmado via WhatsApp.
+                         </p>
+                      </div>
+                    )}
                   </div>
                 </div>
                 <button 
@@ -551,10 +589,17 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const b64 = await fileToBase64(file);
-      const newSettings = {...tempSettings, photoUrl: b64};
-      setTempSettings(newSettings);
-      await handleSaveSettings(newSettings);
+      try {
+        setSaving(true);
+        const b64 = await compressAndEncodeImage(file);
+        const newSettings = {...tempSettings, photoUrl: b64};
+        setTempSettings(newSettings);
+        await handleSaveSettings(newSettings);
+      } catch (err) {
+        showToast("Erro ao processar imagem.", "error");
+      } finally {
+        setSaving(false);
+      }
     }
   };
 
@@ -608,7 +653,6 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
 
   return (
     <div className="space-y-4 sm:space-y-6 relative pb-10">
-      {/* Toast Feedback */}
       {toast && (
         <div className="fixed top-20 right-4 z-[500] animate-in slide-in-from-right fade-in duration-300">
            <div className={`flex items-center gap-2 px-4 py-3 rounded-xl shadow-2xl border ${toast.type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-red-50 border-red-100 text-red-800'}`}>
@@ -758,7 +802,6 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
         {activeTab === 'settings' && (
           <div className="bg-white p-3 sm:p-6 rounded-xl border border-gray-100 shadow-sm space-y-5 animate-in fade-in duration-300">
             <h2 className="font-black text-gray-900 text-xs sm:text-lg uppercase tracking-wider">Dados do Estabelecimento</h2>
-            
             <div className="space-y-4">
                <div className="flex flex-col items-center gap-2">
                   <div className="relative group cursor-pointer" onClick={() => fileInputLogoRef.current?.click()}>
@@ -770,12 +813,10 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
                   </div>
                   <p className="text-[8px] font-bold text-gray-400 uppercase">Logo da Loja</p>
                </div>
-
                <label className="block space-y-1.5">
                  <span className="text-[8px] sm:text-[9px] font-black text-gray-400 uppercase tracking-widest">Nome da Loja</span>
                  <input className="w-full p-3 sm:p-4 bg-gray-50 rounded-xl text-[11px] sm:text-sm font-bold border-transparent focus:border-orange-200 border outline-none" value={tempSettings.name} onChange={e => setTempSettings({...tempSettings, name: e.target.value})} />
                </label>
-
                <label className="block space-y-1.5">
                  <span className="text-[8px] sm:text-[9px] font-black text-gray-400 uppercase tracking-widest">WhatsApp para Pedidos</span>
                  <div className="relative">
@@ -783,7 +824,6 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
                    <input className="w-full p-3 sm:p-4 pl-10 bg-gray-50 rounded-xl text-[11px] sm:text-sm font-bold border-transparent focus:border-orange-200 border outline-none" placeholder="Ex: 5511999999999" value={tempSettings.whatsappPhone} onChange={e => setTempSettings({...tempSettings, whatsappPhone: e.target.value})} />
                  </div>
                </label>
-
                <button onClick={() => handleSaveSettings()} disabled={saving} className="w-full py-3 sm:py-4 bg-gray-900 text-white rounded-xl font-black text-[10px] sm:text-xs uppercase shadow-lg disabled:opacity-50">
                  {saving ? <RefreshCw className="animate-spin mx-auto" size={18}/> : 'GRAVAR TODAS AS ALTERAÇÕES'}
                </button>
@@ -792,7 +832,6 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
         )}
       </div>
 
-      {/* Modal de Confirmação de Exclusão */}
       {deleteTargetId && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
            <div className="bg-white rounded-3xl p-6 sm:p-8 w-full max-w-sm text-center space-y-6 shadow-2xl scale-in duration-200">
@@ -818,7 +857,6 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
           <div className="bg-white w-full max-w-lg p-4 sm:p-8 rounded-2xl sm:rounded-3xl space-y-4 shadow-2xl relative max-h-[92vh] flex flex-col overflow-hidden">
              <button onClick={() => setEditingProduct(null)} className="absolute top-2 right-2 p-2 hover:bg-gray-100 rounded-full"><X size={18}/></button>
              <h3 className="font-black text-sm sm:text-xl text-gray-900 uppercase pr-8">{editingProduct.id ? 'Editar' : 'Novo'} Item</h3>
-             
              <div className="flex-1 overflow-y-auto no-scrollbar space-y-4 pb-2 pr-1">
                 <div className="flex justify-center">
                    <div className="relative cursor-pointer" onClick={() => fileInputProdRef.current?.click()}>
@@ -828,19 +866,21 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
                      <input type="file" ref={fileInputProdRef} hidden accept="image/*" onChange={async e => {
                        const file = e.target.files?.[0];
                        if (file) {
-                         const b64 = await fileToBase64(file);
-                         setEditingProduct({...editingProduct, image: b64});
+                         try {
+                           const b64 = await compressAndEncodeImage(file);
+                           setEditingProduct({...editingProduct, image: b64});
+                         } catch (err) {
+                           showToast("Erro ao processar imagem.", "error");
+                         }
                        }
                      }} />
                    </div>
                 </div>
-
                 <div className="space-y-3">
                   <label className="block space-y-1">
                     <span className="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase">Nome do Prato</span>
                     <input className="w-full p-2.5 sm:p-4 bg-gray-50 rounded-lg text-[10px] sm:text-sm border-transparent focus:border-orange-200 border outline-none" placeholder="Ex: Marmita de Carne Assada" value={editingProduct.name || ''} onChange={e => setEditingProduct({...editingProduct, name: e.target.value})} />
                   </label>
-                  
                   <div className="grid grid-cols-2 gap-2 sm:gap-4">
                     <label className="block space-y-1">
                       <span className="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase">Preço (R$)</span>
@@ -853,12 +893,10 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
                       </select>
                     </label>
                   </div>
-
                   <label className="block space-y-1">
                     <span className="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase">Descrição</span>
                     <textarea className="w-full p-2.5 sm:p-4 bg-gray-50 rounded-lg text-[10px] sm:text-sm h-14 sm:h-20 border-transparent focus:border-orange-200 border outline-none resize-none leading-relaxed" placeholder="Fale sobre os ingredientes..." value={editingProduct.description || ''} onChange={e => setEditingProduct({...editingProduct, description: e.target.value})} />
                   </label>
-
                   <div className="flex items-center gap-2.5 bg-gray-50 p-2.5 sm:p-4 rounded-lg">
                     <input type="checkbox" id="avail-adm" checked={editingProduct.available !== false} onChange={e => setEditingProduct({...editingProduct, available: e.target.checked})} className="w-4 h-4 rounded text-orange-500" />
                     <label htmlFor="avail-adm" className="text-[9px] sm:text-xs font-bold text-gray-700 cursor-pointer">Disponível no cardápio online?</label>
