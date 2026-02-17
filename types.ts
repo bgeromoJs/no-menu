@@ -18,6 +18,7 @@ export interface OperatingHour {
 export interface BusinessSettings {
   name: string;
   photoUrl: string;
+  whatsappPhone: string;
   manualClosed: boolean;
   categories: string[];
   hours: {

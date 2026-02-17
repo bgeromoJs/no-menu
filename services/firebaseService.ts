@@ -1,17 +1,31 @@
 
-import { initializeApp, getApps, getApp, FirebaseApp } from "@firebase/app";
-import { getFirestore, collection, setDoc, doc, getDoc, deleteDoc, onSnapshot, Firestore, query, orderBy, getDocs, writeBatch } from "@firebase/firestore";
+import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
+import { getFirestore, collection, setDoc, doc, getDoc, deleteDoc, onSnapshot, Firestore, writeBatch } from "firebase/firestore";
 import { Product, BusinessSettings } from "../types";
 import { INITIAL_PRODUCTS, DEFAULT_SETTINGS } from "../constants";
 
-const firebaseConfig = {
-  apiKey: process.env.FIREBASE_API_KEY,
-  authDomain: process.env.FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.FIREBASE_PROJECT_ID,
-  storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.FIREBASE_APP_ID
+// Tenta obter a config do JSON completo ou de variáveis individuais
+const getFirebaseConfig = () => {
+  const jsonConfig = process.env.FIREBASE_CONFIG;
+  if (jsonConfig && jsonConfig !== "undefined" && jsonConfig !== '{"apiKey":"","authDomain":"","projectId":"","storageBucket":"","messagingSenderId":"","appId":""}') {
+    try {
+      return JSON.parse(jsonConfig);
+    } catch (e) {
+      console.error("Erro ao fazer parse do FIREBASE_CONFIG:", e);
+    }
+  }
+
+  return {
+    apiKey: process.env.FIREBASE_API_KEY,
+    authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.FIREBASE_APP_ID
+  };
 };
+
+const firebaseConfig = getFirebaseConfig();
 
 const initFirebase = (): { app: FirebaseApp | null, db: Firestore | null } => {
   try {
@@ -21,15 +35,17 @@ const initFirebase = (): { app: FirebaseApp | null, db: Firestore | null } => {
       return { app, db: getFirestore(app) };
     }
     
-    if (!firebaseConfig.apiKey) {
-      console.warn("Firebase não configurado. Usando Mock (LocalStorage).");
+    if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "undefined") {
+      console.warn("⚠️ Firebase não configurado (API Key ausente). Usando modo Offline (Mock).");
       return { app: null, db: null };
     }
     
+    console.log("🔥 Inicializando Firebase...");
     const app = initializeApp(firebaseConfig);
-    return { app, db: getFirestore(app) };
+    const db = getFirestore(app);
+    return { app, db };
   } catch (e) {
-    console.error("Erro Crítico Firebase:", e);
+    console.error("❌ Erro ao conectar ao Firebase:", e);
     return { app: null, db: null };
   }
 };
@@ -41,7 +57,7 @@ const PRODUCTS_COL = "products";
 const SETTINGS_COL = "settings";
 const USERS_COL = "users";
 
-const isMockMode = !db;
+export const isMockMode = !db;
 
 // Função para popular o banco de dados pela primeira vez se estiver vazio
 export const seedDatabase = async () => {
@@ -59,7 +75,7 @@ export const seedDatabase = async () => {
       batch.set(pRef, p);
     });
     await batch.commit();
-    console.log("Database seeded with default menu.");
+    console.log("✅ Database seeded com cardápio padrão.");
   }
 };
 

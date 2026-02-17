@@ -6,6 +6,7 @@ export const ADMIN_PHONE = process.env.ADMIN_PHONE || '5511999999999';
 export const DEFAULT_SETTINGS: BusinessSettings = {
   name: "Vera Marmitex",
   photoUrl: "",
+  whatsappPhone: ADMIN_PHONE,
   manualClosed: false,
   categories: [
     'Marmitas do Dia',

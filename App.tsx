@@ -23,7 +23,11 @@ import {
   Store,
   Camera,
   Database,
-  ArrowRight
+  ArrowRight,
+  Wifi,
+  WifiOff,
+  Phone,
+  AlertTriangle
 } from 'lucide-react';
 import { Product, CartItem, ViewMode, BusinessSettings } from './types';
 import { ADMIN_PHONE, WEEK_DAYS, DEFAULT_SETTINGS } from './constants';
@@ -35,7 +39,8 @@ import {
   saveSettings,
   checkAdminStatus,
   syncUser,
-  seedDatabase
+  seedDatabase,
+  isMockMode
 } from './services/firebaseService';
 
 declare var google: any;
@@ -107,7 +112,6 @@ export default function App() {
       google.accounts.id.prompt((notification: any) => {
         if (notification.isNotDisplayed()) {
           console.warn("Prompt suprimido:", notification.getNotDisplayedReason());
-          // Se o prompt automático estiver bloqueado, o botão oficial é a única forma
           if (googleBtnContainerRef.current) {
             googleBtnContainerRef.current.scrollIntoView({ behavior: 'smooth' });
           }
@@ -116,7 +120,6 @@ export default function App() {
     }
   };
 
-  // Inicialização do Google Login - Apenas uma vez
   useEffect(() => {
     const savedUser = localStorage.getItem('user_session');
     if (savedUser) {
@@ -133,12 +136,11 @@ export default function App() {
           client_id: process.env.GOOGLE_CLIENT_ID,
           callback: handleLoginResponse,
           auto_select: false,
-          itp_support: true // Ativa suporte para Intelligent Tracking Prevention
+          itp_support: true
         });
 
         gsiInitialized.current = true;
         
-        // Só mostra prompt se não estiver logado
         if (!localStorage.getItem('user_session')) {
           google.accounts.id.prompt();
         }
@@ -166,9 +168,8 @@ export default function App() {
     };
 
     initGsi();
-  }, []); // Dependência vazia para evitar loops
+  }, []);
 
-  // Efeito separado para renderizar o botão quando o user desloga
   useEffect(() => {
     if (!user && gsiInitialized.current) {
       const timer = setTimeout(() => {
@@ -245,8 +246,9 @@ export default function App() {
 
   const handleCheckout = () => {
     const itemsList = cart.map(item => `${item.quantity}x ${item.product.name}${item.observations ? ` (Obs: ${item.observations})` : ''}`).join('\n');
+    const destinationPhone = settings.whatsappPhone || ADMIN_PHONE;
     const message = encodeURIComponent(`*NOVO PEDIDO - ${settings.name}*\n\n👤 Cliente: ${customerInfo.name}\n📍 Endereço: ${customerInfo.address}\n💳 Pagamento: ${customerInfo.paymentMethod}\n\n🍱 Itens:\n${itemsList}\n\n💰 Total: R$ ${cartTotal.toFixed(2)}`);
-    window.open(`https://wa.me/${ADMIN_PHONE}?text=${message}`, '_blank');
+    window.open(`https://wa.me/${destinationPhone}?text=${message}`, '_blank');
     setCart([]); setCheckoutStep(0); setIsCartOpen(false);
   };
 
@@ -469,6 +471,7 @@ export default function App() {
 function AdminDashboard({ products, settings }: { products: Product[], settings: BusinessSettings }) {
   const [activeTab, setActiveTab] = useState<'menu' | 'settings' | 'hours' | 'categories'>('menu');
   const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [tempSettings, setTempSettings] = useState<BusinessSettings>(settings);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [saving, setSaving] = useState(false);
@@ -520,12 +523,10 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
   };
 
   const removeCategory = (cat: string) => {
-    if (confirm(`Remover a categoria "${cat}"?`)) {
-      setTempSettings({
-        ...tempSettings,
-        categories: tempSettings.categories.filter(c => c !== cat)
-      });
-    }
+    setTempSettings({
+      ...tempSettings,
+      categories: tempSettings.categories.filter(c => c !== cat)
+    });
   };
 
   const updateHour = (day: number, field: 'open' | 'close' | 'enabled', value: string | boolean) => {
@@ -545,16 +546,27 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
   };
 
   const handleSeed = async () => {
-    if (confirm("Isso irá criar o cardápio inicial no Firebase se ele estiver vazio. Deseja continuar?")) {
-      setSaving(true);
-      await seedDatabase();
-      setSaving(false);
-      alert("Comando de Seed enviado!");
+    setSaving(true);
+    await seedDatabase();
+    setSaving(false);
+    alert("Dados iniciais carregados!");
+  };
+
+  const confirmDelete = async () => {
+    if (deleteTargetId) {
+      await deleteProductFromDb(deleteTargetId);
+      setDeleteTargetId(null);
     }
   };
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      <div className="flex justify-end -mb-2">
+         <div className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[8px] font-bold uppercase tracking-wider border ${isMockMode ? 'bg-orange-50 text-orange-600 border-orange-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>
+            {isMockMode ? <><WifiOff size={10}/> Modo Offline</> : <><Wifi size={10}/> Firebase Online</>}
+         </div>
+      </div>
+
       <div className="animate-in fade-in slide-in-from-top-4 duration-700">
         <div className="bg-white rounded-2xl p-4 sm:p-5 border border-gray-100 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
            <div className="flex items-center gap-4 text-center sm:text-left">
@@ -607,7 +619,7 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
               </div>
             </div>
             <div className="grid gap-2">
-              {products.length === 0 && <div className="p-8 text-center bg-white rounded-xl border border-dashed border-gray-200 text-gray-400 text-[9px] sm:text-xs">O cardápio está vazio no Firebase. Clique no + para começar!</div>}
+              {products.length === 0 && <div className="p-8 text-center bg-white rounded-xl border border-dashed border-gray-200 text-gray-400 text-[9px] sm:text-xs">O cardápio está vazio.</div>}
               {products.map(p => (
                 <div key={p.id} className="bg-white p-2.5 sm:p-4 rounded-xl flex items-center justify-between border border-gray-100 shadow-sm">
                   <div className="flex items-center gap-2.5 sm:gap-4 overflow-hidden">
@@ -623,7 +635,7 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
                   <div className="flex gap-1 sm:gap-2 flex-shrink-0">
                     <button onClick={() => saveProductToDb({...p, available: !p.available})} className={`p-1.5 rounded-lg ${p.available ? 'text-emerald-500 hover:bg-emerald-50' : 'text-red-500 hover:bg-red-50'}`} title={p.available ? 'Disponível' : 'Indisponível'}><Power size={14}/></button>
                     <button onClick={() => setEditingProduct(p)} className="p-1.5 text-gray-400 hover:text-orange-500 hover:bg-orange-50 rounded-lg"><Edit2 size={14}/></button>
-                    <button onClick={() => confirm("Remover?") && deleteProductFromDb(p.id)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={14}/></button>
+                    <button onClick={() => setDeleteTargetId(p.id)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={14}/></button>
                   </div>
                 </div>
               ))}
@@ -634,10 +646,9 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
         {activeTab === 'categories' && (
           <div className="bg-white p-4 sm:p-6 rounded-xl border border-gray-100 shadow-sm space-y-4 animate-in fade-in duration-300">
              <div className="flex items-center justify-between">
-                <h2 className="font-black text-gray-900 text-xs sm:text-lg uppercase tracking-wider">Categorias do Cardápio</h2>
+                <h2 className="font-black text-gray-900 text-xs sm:text-lg uppercase tracking-wider">Categorias</h2>
                 <Tags size={18} className="text-gray-300" />
              </div>
-             <p className="text-[9px] sm:text-[11px] text-gray-500">Adicione ou remova as categorias que aparecerão no topo do cardápio.</p>
              <div className="flex gap-1.5">
                <input 
                  className="flex-1 p-2.5 bg-gray-50 rounded-lg text-[10px] sm:text-sm border-transparent focus:border-orange-200 border outline-none" 
@@ -646,79 +657,75 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
                  onChange={e => setNewCategoryName(e.target.value)}
                  onKeyDown={e => e.key === 'Enter' && addCategory()}
                />
-               <button onClick={addCategory} className="bg-gray-900 text-white px-3 sm:px-6 rounded-lg text-[9px] sm:text-xs font-bold hover:bg-black transition-colors">Adicionar</button>
+               <button onClick={addCategory} className="bg-gray-900 text-white px-3 sm:px-6 rounded-lg text-[9px] sm:text-xs font-bold">Adicionar</button>
              </div>
              <div className="grid grid-cols-1 gap-2">
-               {tempSettings.categories.length === 0 && <p className="text-center py-4 text-gray-400 text-[10px]">Nenhuma categoria.</p>}
                {tempSettings.categories.map((cat, idx) => (
-                 <div key={cat} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100 group">
-                    <div className="flex items-center gap-3">
-                       <span className="text-gray-300 font-mono text-[9px]">{idx + 1}</span>
-                       <span className="text-[10px] sm:text-xs font-bold text-gray-700">{cat}</span>
-                    </div>
-                    <button onClick={() => removeCategory(cat)} className="text-gray-300 hover:text-red-500 p-1 transition-colors"><Trash2 size={14}/></button>
+                 <div key={cat} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <span className="text-[10px] sm:text-xs font-bold text-gray-700">{cat}</span>
+                    <button onClick={() => removeCategory(cat)} className="text-gray-300 hover:text-red-500"><Trash2 size={14}/></button>
                  </div>
                ))}
              </div>
-             <div className="pt-2">
-                <button onClick={() => handleSaveSettings()} className="w-full py-3 sm:py-4 bg-orange-500 text-white rounded-lg sm:rounded-xl font-bold text-[10px] sm:text-xs shadow-md shadow-orange-100 hover:bg-orange-600 transition-all flex items-center justify-center gap-2">
-                  <Database size={14} /> SALVAR CATEGORIAS NO FIREBASE
-                </button>
-             </div>
+             <button onClick={() => handleSaveSettings()} className="w-full py-3 bg-orange-500 text-white rounded-lg font-bold text-[10px] sm:text-xs">SALVAR CATEGORIAS</button>
           </div>
         )}
 
         {activeTab === 'hours' && (
           <div className="bg-white p-3 sm:p-6 rounded-xl border border-gray-100 shadow-sm space-y-4 animate-in fade-in duration-300">
-             <h2 className="font-black text-gray-900 text-xs sm:text-lg uppercase tracking-wider">Funcionamento Automático</h2>
+             <h2 className="font-black text-gray-900 text-xs sm:text-lg uppercase tracking-wider">Horários</h2>
              <div className="space-y-2.5">
                 {WEEK_DAYS.map((dayName, idx) => {
                   const hour = tempSettings.hours[idx];
                   return (
-                    <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 sm:p-4 bg-gray-50 rounded-lg gap-2 border border-transparent hover:border-orange-100">
+                    <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 sm:p-4 bg-gray-50 rounded-lg gap-2">
                       <div className="flex items-center gap-2">
                         <input type="checkbox" checked={hour.enabled} onChange={e => updateHour(idx, 'enabled', e.target.checked)} className="w-3.5 h-3.5 rounded text-orange-500" />
                         <span className="text-[9px] sm:text-xs font-bold w-16">{dayName}</span>
                       </div>
-                      {hour.enabled ? (
+                      {hour.enabled && (
                         <div className="flex items-center gap-1.5 justify-end">
-                          <input type="time" value={hour.open} onChange={e => updateHour(idx, 'open', e.target.value)} className="text-[10px] p-1.5 rounded bg-white border border-gray-200 text-black font-bold outline-none ring-offset-0 focus:ring-1 focus:ring-orange-300" />
-                          <span className="text-gray-400 text-[8px]">até</span>
-                          <input type="time" value={hour.close} onChange={e => updateHour(idx, 'close', e.target.value)} className="text-[10px] p-1.5 rounded bg-white border border-gray-200 text-black font-bold outline-none ring-offset-0 focus:ring-1 focus:ring-orange-300" />
+                          <input type="time" value={hour.open} onChange={e => updateHour(idx, 'open', e.target.value)} className="text-[10px] p-1.5 rounded bg-white border outline-none" />
+                          <input type="time" value={hour.close} onChange={e => updateHour(idx, 'close', e.target.value)} className="text-[10px] p-1.5 rounded bg-white border outline-none" />
                         </div>
-                      ) : (
-                        <span className="text-[8px] sm:text-[9px] text-gray-400 font-bold uppercase text-right">Fechado</span>
                       )}
                     </div>
                   )
                 })}
              </div>
-             <button onClick={() => handleSaveSettings()} className="w-full py-2.5 sm:py-4 bg-orange-500 text-white rounded-lg sm:rounded-xl font-bold text-[9px] sm:text-xs">SALVAR ESCALA SEMANAL</button>
+             <button onClick={() => handleSaveSettings()} className="w-full py-2.5 sm:py-4 bg-orange-500 text-white rounded-lg font-bold text-[9px] sm:text-xs">SALVAR HORÁRIOS</button>
           </div>
         )}
 
         {activeTab === 'settings' && (
           <div className="bg-white p-3 sm:p-6 rounded-xl border border-gray-100 shadow-sm space-y-5 animate-in fade-in duration-300">
-            <h2 className="font-black text-gray-900 text-xs sm:text-lg uppercase tracking-wider">Configuração Visual</h2>
+            <h2 className="font-black text-gray-900 text-xs sm:text-lg uppercase tracking-wider">Configurações</h2>
             
             <div className="space-y-4">
                <div className="flex flex-col items-center gap-2">
-                  <div className="relative group">
+                  <div className="relative group" onClick={() => fileInputLogoRef.current?.click()}>
                      <div className="w-16 h-16 sm:w-24 sm:h-24 rounded-xl bg-gray-50 overflow-hidden border-2 border-dashed border-gray-200 flex items-center justify-center">
                        {tempSettings.photoUrl ? <img src={tempSettings.photoUrl} className="w-full h-full object-cover" /> : <ImageIcon className="text-gray-300" size={24}/>}
                      </div>
-                     <button onClick={() => fileInputLogoRef.current?.click()} className="absolute -bottom-1 -right-1 bg-orange-500 text-white p-1.5 rounded-lg shadow-md hover:scale-110 transition-transform"><Camera size={12}/></button>
+                     <button className="absolute -bottom-1 -right-1 bg-orange-500 text-white p-1.5 rounded-lg"><Camera size={12}/></button>
                      <input type="file" ref={fileInputLogoRef} hidden accept="image/*" onChange={handleLogoUpload} />
                   </div>
-                  <p className="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase tracking-widest">Logo da Loja</p>
                </div>
 
                <label className="block space-y-1.5">
-                 <span className="text-[8px] sm:text-[9px] font-black text-gray-400 uppercase tracking-widest">Nome do Estabelecimento</span>
-                 <input className="w-full p-2.5 sm:p-4 bg-gray-50 rounded-lg sm:rounded-xl text-[10px] sm:text-sm font-bold border-transparent focus:border-orange-200 border outline-none" value={tempSettings.name} onChange={e => setTempSettings({...tempSettings, name: e.target.value})} />
+                 <span className="text-[8px] sm:text-[9px] font-black text-gray-400 uppercase tracking-widest">Nome da Loja</span>
+                 <input className="w-full p-2.5 sm:p-4 bg-gray-50 rounded-lg text-[10px] sm:text-sm font-bold border-transparent focus:border-orange-200 border outline-none" value={tempSettings.name} onChange={e => setTempSettings({...tempSettings, name: e.target.value})} />
                </label>
 
-               <button onClick={() => handleSaveSettings()} disabled={saving} className="w-full py-2.5 sm:py-4 bg-gray-900 text-white rounded-lg sm:rounded-xl font-black text-[9px] sm:text-xs uppercase shadow-lg shadow-gray-100 disabled:opacity-50">
+               <label className="block space-y-1.5">
+                 <span className="text-[8px] sm:text-[9px] font-black text-gray-400 uppercase tracking-widest">Telefone de Pedidos (DDI + DDD + Numero)</span>
+                 <div className="relative">
+                   <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                   <input className="w-full p-2.5 sm:p-4 pl-10 bg-gray-50 rounded-lg text-[10px] sm:text-sm font-bold border-transparent focus:border-orange-200 border outline-none" placeholder="Ex: 5511999999999" value={tempSettings.whatsappPhone} onChange={e => setTempSettings({...tempSettings, whatsappPhone: e.target.value})} />
+                 </div>
+               </label>
+
+               <button onClick={() => handleSaveSettings()} disabled={saving} className="w-full py-2.5 sm:py-4 bg-gray-900 text-white rounded-lg font-black text-[9px] sm:text-xs uppercase shadow-lg disabled:opacity-50">
                  {saving ? 'Gravando...' : 'Salvar Dados'}
                </button>
             </div>
@@ -726,11 +733,30 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
         )}
       </div>
 
+      {/* Modal de Confirmação de Exclusão */}
+      {deleteTargetId && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+           <div className="bg-white rounded-3xl p-6 sm:p-8 w-full max-w-sm text-center space-y-6 shadow-2xl scale-in duration-200">
+              <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto">
+                 <AlertTriangle size={32} />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-gray-900">Excluir Item?</h3>
+                <p className="text-sm text-gray-500 leading-relaxed mt-2">Esta ação não pode ser desfeita. O prato será removido permanentemente do cardápio.</p>
+              </div>
+              <div className="flex gap-3">
+                 <button onClick={() => setDeleteTargetId(null)} className="flex-1 py-3.5 bg-gray-50 text-gray-500 font-bold rounded-xl hover:bg-gray-100 transition-colors">Cancelar</button>
+                 <button onClick={confirmDelete} className="flex-1 py-3.5 bg-red-500 text-white font-bold rounded-xl hover:bg-red-600 shadow-lg shadow-red-100 transition-all">Excluir Agora</button>
+              </div>
+           </div>
+        </div>
+      )}
+
       {editingProduct && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-lg p-4 sm:p-8 rounded-2xl sm:rounded-3xl space-y-4 shadow-2xl relative max-h-[92vh] flex flex-col overflow-hidden">
              <button onClick={() => setEditingProduct(null)} className="absolute top-2 right-2 p-2 hover:bg-gray-100 rounded-full"><X size={18}/></button>
-             <h3 className="font-black text-sm sm:text-xl text-gray-900 uppercase pr-8">{editingProduct.id ? 'Editar' : 'Novo'} Item do Cardápio</h3>
+             <h3 className="font-black text-sm sm:text-xl text-gray-900 uppercase pr-8">{editingProduct.id ? 'Editar' : 'Novo'} Item</h3>
              
              <div className="flex-1 overflow-y-auto no-scrollbar space-y-4 pb-2 pr-1">
                 <div className="flex justify-center">
@@ -738,7 +764,6 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
                      <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-xl bg-gray-50 overflow-hidden border-2 border-dashed border-gray-200 flex items-center justify-center">
                         {editingProduct.image ? <img src={editingProduct.image} className="w-full h-full object-cover" /> : <ImageIcon className="text-gray-300" size={28}/>}
                      </div>
-                     <div className="absolute inset-0 bg-black/5 flex items-center justify-center opacity-0 hover:opacity-100 rounded-xl transition-opacity"><Upload size={20} className="text-white" /></div>
                      <input type="file" ref={fileInputProdRef} hidden accept="image/*" onChange={async e => {
                        const file = e.target.files?.[0];
                        if (file) {
@@ -769,8 +794,8 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
                   </div>
 
                   <label className="block space-y-1">
-                    <span className="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase">Descrição Apetitosa</span>
-                    <textarea className="w-full p-2.5 sm:p-4 bg-gray-50 rounded-lg text-[10px] sm:text-sm h-14 sm:h-20 border-transparent focus:border-orange-200 border outline-none resize-none leading-relaxed" placeholder="Fale sobre os ingredientes e o sabor..." value={editingProduct.description || ''} onChange={e => setEditingProduct({...editingProduct, description: e.target.value})} />
+                    <span className="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase">Descrição</span>
+                    <textarea className="w-full p-2.5 sm:p-4 bg-gray-50 rounded-lg text-[10px] sm:text-sm h-14 sm:h-20 border-transparent focus:border-orange-200 border outline-none resize-none leading-relaxed" placeholder="Fale sobre os ingredientes..." value={editingProduct.description || ''} onChange={e => setEditingProduct({...editingProduct, description: e.target.value})} />
                   </label>
 
                   <div className="flex items-center gap-2.5 bg-gray-50 p-2.5 sm:p-4 rounded-lg">
