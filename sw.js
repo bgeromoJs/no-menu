@@ -1,9 +1,9 @@
 
-const CACHE_NAME = 'veras-marmitex-v1';
+const CACHE_NAME = 'veras-marmitex-v2';
 const ASSETS_TO_CACHE = [
-  './',
-  './index.html',
-  './manifest.json'
+  '/',
+  '/index.html',
+  '/manifest.json'
 ];
 
 self.addEventListener('install', (event) => {
@@ -31,7 +31,7 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Estratégia: Network first, fallback to cache
+  // Priorizar Rede, fallback para cache
   event.respondWith(
     fetch(event.request).catch(() => {
       return caches.match(event.request);
