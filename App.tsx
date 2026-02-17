@@ -78,6 +78,7 @@ export default function App() {
   const [checkoutStep, setCheckoutStep] = useState(0);
   
   const googleBtnContainerRef = useRef<HTMLDivElement>(null);
+  const gsiInitialized = useRef(false);
 
   const [customerInfo, setCustomerInfo] = useState({
     name: '',
@@ -103,18 +104,19 @@ export default function App() {
 
   const forceGoogleLogin = () => {
     if (typeof google !== 'undefined') {
-      // Força a exibição do prompt do Google, ignorando supressões anteriores se possível
       google.accounts.id.prompt((notification: any) => {
         if (notification.isNotDisplayed()) {
           console.warn("Prompt suprimido:", notification.getNotDisplayedReason());
-          // Se o prompt automático falhou, o botão oficial é a única saída
-          alert("Por favor, clique no botão 'Entrar com Google' que apareceu no topo.");
+          // Se o prompt automático estiver bloqueado, o botão oficial é a única forma
+          if (googleBtnContainerRef.current) {
+            googleBtnContainerRef.current.scrollIntoView({ behavior: 'smooth' });
+          }
         }
       });
     }
   };
 
-  // Inicialização do Google Login
+  // Inicialização do Google Login - Apenas uma vez
   useEffect(() => {
     const savedUser = localStorage.getItem('user_session');
     if (savedUser) {
@@ -124,18 +126,23 @@ export default function App() {
     }
 
     const initGsi = () => {
+      if (gsiInitialized.current) return;
+      
       if (typeof google !== 'undefined') {
         google.accounts.id.initialize({
           client_id: process.env.GOOGLE_CLIENT_ID,
           callback: handleLoginResponse,
           auto_select: false,
-          cancel_on_tap_outside: false
+          itp_support: true // Ativa suporte para Intelligent Tracking Prevention
         });
 
-        // Tenta mostrar o One Tap automaticamente
-        google.accounts.id.prompt();
+        gsiInitialized.current = true;
+        
+        // Só mostra prompt se não estiver logado
+        if (!localStorage.getItem('user_session')) {
+          google.accounts.id.prompt();
+        }
 
-        // Tenta renderizar o botão imediatamente se o container existir
         renderGoogleButton();
       } else {
         setTimeout(initGsi, 500);
@@ -154,12 +161,31 @@ export default function App() {
         });
         setGoogleBtnLoaded(true);
       } else if (!user) {
-        // Se o container ainda não estiver no DOM, tenta novamente em breve
         setTimeout(renderGoogleButton, 300);
       }
     };
 
     initGsi();
+  }, []); // Dependência vazia para evitar loops
+
+  // Efeito separado para renderizar o botão quando o user desloga
+  useEffect(() => {
+    if (!user && gsiInitialized.current) {
+      const timer = setTimeout(() => {
+        if (googleBtnContainerRef.current && typeof google !== 'undefined') {
+          google.accounts.id.renderButton(googleBtnContainerRef.current, {
+            theme: 'outline',
+            size: 'medium',
+            shape: 'pill',
+            text: 'signin_with',
+            locale: 'pt-BR',
+            width: 180
+          });
+          setGoogleBtnLoaded(true);
+        }
+      }, 500);
+      return () => clearTimeout(timer);
+    }
   }, [user]);
 
   useEffect(() => {
@@ -268,7 +294,6 @@ export default function App() {
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                 {/* Botão de Fallback Customizado: Sempre visível e clicável se o Google falhar */}
                  {!googleBtnLoaded && (
                    <button 
                      onClick={forceGoogleLogin}
@@ -278,7 +303,6 @@ export default function App() {
                      <span>Acessar</span>
                    </button>
                  )}
-                 {/* Container oficial do Google: O SDK injeta o botão aqui */}
                  <div ref={googleBtnContainerRef} className={`h-8 sm:h-9 overflow-hidden rounded-full ${!googleBtnLoaded ? 'w-0 opacity-0' : 'opacity-100 transition-opacity duration-300'}`}></div>
               </div>
             )}
