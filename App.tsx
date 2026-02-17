@@ -125,17 +125,14 @@ export default function App() {
   // Registro do Service Worker e Eventos PWA
   useEffect(() => {
     if ('serviceWorker' in navigator) {
-      // Registrar sempre da raiz para escopo total
       navigator.serviceWorker.register('/sw.js', { scope: '/' })
         .then(reg => console.log('SW registrado (Raiz):', reg.scope))
         .catch(err => console.error('Erro SW:', err));
     }
 
     const handleBeforeInstallPrompt = (e: any) => {
-      console.log('Evento beforeinstallprompt disparado!');
       e.preventDefault();
       setDeferredPrompt(e);
-      // Popup sutil após 4 segundos se já carregou os dados básicos
       setTimeout(() => setShowInstallPopup(true), 4000);
     };
 
@@ -147,14 +144,12 @@ export default function App() {
     if (!deferredPrompt) return;
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
-    console.log(`Resultado da instalação: ${outcome}`);
     if (outcome === 'accepted') {
       setDeferredPrompt(null);
       setShowInstallPopup(false);
     }
   };
 
-  // Efeito para sincronizar Manifesto, Favicon e Apple Icon com os dados da loja
   useEffect(() => {
     const shopLogo = settings.photoUrl || "https://cdn-icons-png.flaticon.com/512/1046/1046857.png";
     const shopName = settings.name || "Vera Marmitex";
@@ -165,7 +160,6 @@ export default function App() {
     if (appleIcon) appleIcon.href = shopLogo;
     document.title = shopName;
 
-    // A start_url precisa ser absoluta quando o manifesto é um Blob URL
     const dynamicManifest = {
       "name": shopName,
       "short_name": shopName.split(' ')[0],
@@ -573,6 +567,12 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
     catch (e) { showToast("Erro ao atualizar.", "error"); } finally { setSaving(false); }
   };
 
+  const toggleManualStatus = async () => {
+    const updated = { ...tempSettings, manualClosed: !tempSettings.manualClosed };
+    setTempSettings(updated);
+    await handleSaveSettings(updated);
+  };
+
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -590,6 +590,24 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
     setTempSettings({ ...tempSettings, hours: { ...tempSettings.hours, [day]: { ...tempSettings.hours[day], [field]: value } } });
   };
 
+  const addCategory = () => {
+    if (!newCategoryName.trim()) return;
+    if (tempSettings.categories.includes(newCategoryName)) return;
+    setTempSettings({ ...tempSettings, categories: [...tempSettings.categories, newCategoryName.trim()] });
+    setNewCategoryName('');
+  };
+
+  const removeCategory = (cat: string) => {
+    setTempSettings({ ...tempSettings, categories: tempSettings.categories.filter(c => c !== cat) });
+  };
+
+  const confirmDelete = async () => {
+    if (deleteTargetId) {
+      try { setSaving(true); await deleteProductFromDb(deleteTargetId); showToast("Item removido!"); setDeleteTargetId(null); }
+      catch (e) { showToast("Erro ao remover.", "error"); } finally { setSaving(false); }
+    }
+  };
+
   return (
     <div className="space-y-4 sm:space-y-6 relative pb-10">
       {toast && (
@@ -600,6 +618,24 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
            </div>
         </div>
       )}
+
+      {/* Botão de Controle Rápido de Status */}
+      <div className="animate-in fade-in slide-in-from-top-4 duration-700">
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-gray-100 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+           <div className="flex items-center gap-4 text-center sm:text-left">
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${tempSettings.manualClosed ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-500'}`}>
+                {tempSettings.manualClosed ? <ShieldAlert size={24} /> : <Store size={24} />}
+              </div>
+              <div>
+                <h3 className="text-xs sm:text-sm font-bold text-gray-900">Status do Recebimento</h3>
+                <p className="text-[10px] sm:text-xs text-gray-500 font-medium">{tempSettings.manualClosed ? 'Pedidos desativados' : 'Recebendo pedidos'}</p>
+              </div>
+           </div>
+           <button onClick={toggleManualStatus} disabled={saving} className={`w-full sm:w-auto px-6 py-3 rounded-xl font-bold text-[10px] sm:text-xs transition-all flex items-center justify-center gap-2 group disabled:opacity-50 ${tempSettings.manualClosed ? 'bg-emerald-500 text-white shadow-lg' : 'bg-red-500 text-white shadow-lg'}`}>
+             <Power size={14} /> {tempSettings.manualClosed ? 'REATIVAR LOJA' : 'FECHAR AGORA'}
+           </button>
+        </div>
+      </div>
 
       <div className="flex bg-white p-1 rounded-xl border border-gray-100 shadow-sm overflow-x-auto no-scrollbar">
         {[ { id: 'menu', icon: Utensils, label: 'Cardápio' }, { id: 'categories', icon: Tags, label: 'Categorias' }, { id: 'hours', icon: Clock, label: 'Horários' }, { id: 'settings', icon: Store, label: 'Dados' }
@@ -614,14 +650,14 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
         {activeTab === 'menu' && (
           <div className="space-y-3">
             <div className="flex justify-between items-center px-1">
-              <h2 className="font-black text-gray-900 text-xs sm:text-lg">Gerenciar Cardápio</h2>
+              <h2 className="font-black text-gray-900 text-xs sm:text-lg uppercase">Gerenciar Cardápio</h2>
               <button onClick={() => setEditingProduct({ available: true, category: tempSettings.categories[0] })} className="bg-orange-500 text-white px-2.5 sm:px-4 py-1.5 rounded-lg text-[9px] sm:text-xs font-bold shadow-md shadow-orange-50">+ Novo Item</button>
             </div>
             <div className="grid gap-2">
               {products.map(p => (
                 <div key={p.id} className="bg-white p-2.5 sm:p-4 rounded-xl flex items-center justify-between border border-gray-100 shadow-sm">
                   <div className="flex items-center gap-2.5 sm:gap-4 overflow-hidden">
-                    <img src={p.image} className="w-9 h-9 sm:w-12 sm:h-12 rounded-lg object-cover flex-shrink-0" />
+                    <img src={p.image} className="w-9 h-9 sm:w-12 sm:h-12 rounded-lg object-cover flex-shrink-0" alt={p.name} />
                     <div className="overflow-hidden">
                       <p className="font-bold text-[10px] sm:text-sm text-gray-900 truncate">{p.name}</p>
                       <p className="text-[8px] sm:text-[10px] text-orange-600 font-black">R$ {p.price.toFixed(2)}</p>
@@ -638,6 +674,56 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
           </div>
         )}
 
+        {activeTab === 'categories' && (
+          <div className="bg-white p-4 sm:p-6 rounded-xl border border-gray-100 shadow-sm space-y-4">
+             <h2 className="font-black text-gray-900 text-xs sm:text-lg uppercase">Categorias</h2>
+             <div className="flex gap-1.5">
+               <input className="flex-1 p-2.5 bg-gray-50 rounded-lg text-[10px] sm:text-sm border-transparent focus:border-orange-200 border outline-none" placeholder="Nova categoria..." value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addCategory()} />
+               <button onClick={addCategory} className="bg-gray-900 text-white px-3 sm:px-6 rounded-lg text-[9px] sm:text-xs font-bold">Adicionar</button>
+             </div>
+             <div className="grid gap-2">
+               {tempSettings.categories.map((cat) => (
+                 <div key={cat} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <span className="text-[10px] sm:text-xs font-bold text-gray-700">{cat}</span>
+                    <button onClick={() => removeCategory(cat)} className="text-gray-300 hover:text-red-500"><Trash2 size={14}/></button>
+                 </div>
+               ))}
+             </div>
+             <button onClick={() => handleSaveSettings()} disabled={saving} className="w-full py-3 bg-orange-500 text-white rounded-lg font-bold text-[10px] sm:text-xs">
+                {saving ? <RefreshCw className="animate-spin mx-auto" size={16}/> : 'SALVAR CATEGORIAS'}
+             </button>
+          </div>
+        )}
+
+        {activeTab === 'hours' && (
+          <div className="bg-white p-3 sm:p-6 rounded-xl border border-gray-100 shadow-sm space-y-4">
+             <h2 className="font-black text-gray-900 text-xs sm:text-lg uppercase">Horários</h2>
+             <div className="space-y-2">
+                {WEEK_DAYS.map((dayName, idx) => {
+                  const hour = tempSettings.hours[idx];
+                  return (
+                    <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-gray-50 rounded-lg gap-3">
+                      <div className="flex items-center gap-3">
+                        <input type="checkbox" checked={hour.enabled} onChange={e => updateHour(idx, 'enabled', e.target.checked)} className="w-4 h-4 rounded text-orange-500" />
+                        <span className="text-[10px] sm:text-xs font-bold w-24">{dayName}</span>
+                      </div>
+                      {hour.enabled ? (
+                        <div className="flex items-center gap-2">
+                          <input type="time" value={hour.open} onChange={e => updateHour(idx, 'open', e.target.value)} className="text-[10px] p-2 rounded bg-white border outline-none font-bold" />
+                          <span className="text-gray-400 text-[10px]">às</span>
+                          <input type="time" value={hour.close} onChange={e => updateHour(idx, 'close', e.target.value)} className="text-[10px] p-2 rounded bg-white border outline-none font-bold" />
+                        </div>
+                      ) : <span className="text-[9px] font-bold text-gray-300 uppercase italic">Fechado</span>}
+                    </div>
+                  )
+                })}
+             </div>
+             <button onClick={() => handleSaveSettings()} disabled={saving} className="w-full py-4 bg-orange-500 text-white rounded-xl font-bold text-[10px] shadow-lg shadow-orange-50">
+               {saving ? <RefreshCw className="animate-spin mx-auto" size={18}/> : 'SALVAR HORÁRIOS'}
+             </button>
+          </div>
+        )}
+
         {activeTab === 'settings' && (
           <div className="bg-white p-3 sm:p-6 rounded-xl border border-gray-100 shadow-sm space-y-5 animate-in fade-in">
             <h2 className="font-black text-gray-900 text-xs sm:text-lg uppercase">Dados da Loja</h2>
@@ -645,12 +731,12 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
                <div className="flex flex-col items-center gap-2">
                   <div className="relative cursor-pointer" onClick={() => fileInputLogoRef.current?.click()}>
                      <div className="w-24 h-24 rounded-2xl bg-gray-50 border-2 border-dashed border-gray-200 flex items-center justify-center overflow-hidden">
-                       {tempSettings.photoUrl ? <img src={tempSettings.photoUrl} className="w-full h-full object-cover" /> : <ImageIcon className="text-gray-300" size={32}/>}
+                       {tempSettings.photoUrl ? <img src={tempSettings.photoUrl} className="w-full h-full object-cover" alt="Logo" /> : <ImageIcon className="text-gray-300" size={32}/>}
                      </div>
                      <button className="absolute -bottom-1 -right-1 bg-orange-500 text-white p-2 rounded-lg shadow-md"><Camera size={14}/></button>
                      <input type="file" ref={fileInputLogoRef} hidden accept="image/*" onChange={handleLogoUpload} />
                   </div>
-                  <p className="text-[8px] font-bold text-gray-400 uppercase">Ícone do App (Dinamico)</p>
+                  <p className="text-[8px] font-bold text-gray-400 uppercase">Ícone do App</p>
                </div>
                <label className="block space-y-1.5">
                  <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Nome da Loja</span>
@@ -668,6 +754,18 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
         )}
       </div>
 
+      {deleteTargetId && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+           <div className="bg-white rounded-3xl p-6 w-full max-w-sm text-center space-y-4">
+              <h3 className="text-lg font-black">Excluir Item?</h3>
+              <div className="flex gap-2">
+                 <button onClick={() => setDeleteTargetId(null)} className="flex-1 py-3 bg-gray-50 rounded-xl font-bold">Cancelar</button>
+                 <button onClick={confirmDelete} className="flex-1 py-3 bg-red-500 text-white rounded-xl font-bold">Excluir</button>
+              </div>
+           </div>
+        </div>
+      )}
+
       {editingProduct && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-2 bg-black/60 backdrop-blur-sm">
           <div className="bg-white w-full max-w-lg p-4 sm:p-8 rounded-3xl space-y-4 shadow-2xl relative">
@@ -677,7 +775,7 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
                 <div className="flex justify-center">
                    <div className="relative cursor-pointer" onClick={() => fileInputProdRef.current?.click()}>
                      <div className="w-24 h-24 rounded-xl bg-gray-50 border-2 border-dashed border-gray-200 flex items-center justify-center overflow-hidden">
-                        {editingProduct.image ? <img src={editingProduct.image} className="w-full h-full object-cover" /> : <ImageIcon className="text-gray-300" size={28}/>}
+                        {editingProduct.image ? <img src={editingProduct.image} className="w-full h-full object-cover" alt="Produto" /> : <ImageIcon className="text-gray-300" size={28}/>}
                      </div>
                      <input type="file" ref={fileInputProdRef} hidden accept="image/*" onChange={async e => {
                        const file = e.target.files?.[0];
@@ -690,6 +788,9 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
                 </div>
                 <input className="w-full p-3 bg-gray-50 rounded-lg text-[10px] sm:text-sm font-bold border-transparent focus:border-orange-200 border outline-none" placeholder="Nome do prato" value={editingProduct.name || ''} onChange={e => setEditingProduct({...editingProduct, name: e.target.value})} />
                 <input className="w-full p-3 bg-gray-50 rounded-lg text-[10px] sm:text-sm font-bold border-transparent focus:border-orange-200 border outline-none" placeholder="Preço" type="number" step="0.10" value={editingProduct.price || 0} onChange={e => setEditingProduct({...editingProduct, price: parseFloat(e.target.value)})} />
+                <select className="w-full p-3 bg-gray-50 rounded-lg text-[10px] sm:text-sm font-bold border-transparent focus:border-orange-200 border outline-none" value={editingProduct.category || tempSettings.categories[0]} onChange={e => setEditingProduct({...editingProduct, category: e.target.value})}>
+                  {tempSettings.categories.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
                 <textarea className="w-full p-3 bg-gray-50 rounded-lg text-[10px] sm:text-sm h-20 border-transparent focus:border-orange-200 border outline-none resize-none" placeholder="Descrição..." value={editingProduct.description || ''} onChange={e => setEditingProduct({...editingProduct, description: e.target.value})} />
              </div>
              <div className="flex gap-2">
