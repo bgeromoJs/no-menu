@@ -21,7 +21,9 @@ import {
   LogIn,
   Clock,
   Store,
-  Camera
+  Camera,
+  Database,
+  ArrowRight
 } from 'lucide-react';
 import { Product, CartItem, ViewMode, BusinessSettings } from './types';
 import { ADMIN_PHONE, WEEK_DAYS, DEFAULT_SETTINGS } from './constants';
@@ -32,7 +34,8 @@ import {
   subscribeSettings,
   saveSettings,
   checkAdminStatus,
-  syncUser
+  syncUser,
+  seedDatabase
 } from './services/firebaseService';
 
 declare var google: any;
@@ -73,6 +76,8 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [checkoutStep, setCheckoutStep] = useState(0);
   
+  const googleBtnContainerRef = useRef<HTMLDivElement>(null);
+
   const [customerInfo, setCustomerInfo] = useState({
     name: '',
     address: '',
@@ -108,12 +113,26 @@ export default function App() {
             }
           }
         });
+
+        // Tenta mostrar o One Tap (pode ser suprimido pelo Google se o usuário fechou antes)
+        google.accounts.id.prompt();
+
+        // Renderiza o botão fixo que NUNCA é suprimido no clique
+        if (googleBtnContainerRef.current) {
+          google.accounts.id.renderButton(googleBtnContainerRef.current, {
+            theme: 'outline',
+            size: 'medium',
+            shape: 'pill',
+            text: 'signin_with',
+            locale: 'pt-BR'
+          });
+        }
       } else {
         setTimeout(initGsi, 500);
       }
     };
     initGsi();
-  }, []);
+  }, [user]); // Re-inicializa se o user mudar para garantir que o container do botão seja populado se necessário
 
   useEffect(() => {
     const unsubProducts = subscribeProducts((p) => {
@@ -143,10 +162,6 @@ export default function App() {
 
   const cartTotal = useMemo(() => cart.reduce((acc, item) => acc + (item.product.price * item.quantity), 0), [cart]);
   const cartItemCount = useMemo(() => cart.reduce((a, b) => a + b.quantity, 0), [cart]);
-
-  const handleLogin = () => {
-    google.accounts.id.prompt();
-  };
 
   const handleLogout = () => {
     setUser(null);
@@ -223,13 +238,10 @@ export default function App() {
                 <button onClick={handleLogout} className="text-gray-400 hover:text-red-500 transition-colors p-1"><LogOut size={16}/></button>
               </div>
             ) : (
-              <button 
-                onClick={handleLogin}
-                className="flex items-center gap-1.5 bg-gray-50 text-gray-600 px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold border border-gray-200 hover:bg-gray-100 transition-all shadow-sm"
-              >
-                <LogIn size={14}/>
-                <span>Acessar</span>
-              </button>
+              <div className="flex items-center">
+                 {/* O botão oficial do Google será injetado aqui. Ele ignora a supressão de clique. */}
+                 <div ref={googleBtnContainerRef} className="h-8 sm:h-9 overflow-hidden rounded-full border border-gray-200 shadow-sm"></div>
+              </div>
             )}
           </div>
         </div>
@@ -469,6 +481,15 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
     await handleSaveSettings(updated);
   };
 
+  const handleSeed = async () => {
+    if (confirm("Isso irá criar o cardápio inicial no Firebase se ele estiver vazio. Deseja continuar?")) {
+      setSaving(true);
+      await seedDatabase();
+      setSaving(false);
+      alert("Comando de Seed enviado!");
+    }
+  };
+
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Botão de Status da Loja */}
@@ -517,22 +538,28 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
         {activeTab === 'menu' && (
           <div className="space-y-3 animate-in fade-in duration-300">
             <div className="flex justify-between items-center px-1">
-              <h2 className="font-black text-gray-900 flex items-center gap-1.5 text-xs sm:text-lg">Gerenciar Pratos</h2>
-              <button onClick={() => setEditingProduct({ available: true, category: tempSettings.categories[0] })} className="bg-orange-500 text-white px-2.5 sm:px-4 py-1.5 rounded-lg text-[9px] sm:text-xs font-bold shadow-md shadow-orange-50 hover:bg-orange-600">+ Novo</button>
+              <h2 className="font-black text-gray-900 flex items-center gap-1.5 text-xs sm:text-lg">Gerenciar Cardápio</h2>
+              <div className="flex gap-2">
+                 <button onClick={handleSeed} className="text-gray-400 hover:text-blue-500 p-2"><Database size={16} /></button>
+                 <button onClick={() => setEditingProduct({ available: true, category: tempSettings.categories[0] })} className="bg-orange-500 text-white px-2.5 sm:px-4 py-1.5 rounded-lg text-[9px] sm:text-xs font-bold shadow-md shadow-orange-50 hover:bg-orange-600">+ Novo Item</button>
+              </div>
             </div>
             <div className="grid gap-2">
-              {products.length === 0 && <div className="p-8 text-center bg-white rounded-xl border border-dashed border-gray-200 text-gray-400 text-[9px] sm:text-xs">Nenhum prato cadastrado.</div>}
+              {products.length === 0 && <div className="p-8 text-center bg-white rounded-xl border border-dashed border-gray-200 text-gray-400 text-[9px] sm:text-xs">O cardápio está vazio no Firebase. Clique no + para começar!</div>}
               {products.map(p => (
                 <div key={p.id} className="bg-white p-2.5 sm:p-4 rounded-xl flex items-center justify-between border border-gray-100 shadow-sm">
                   <div className="flex items-center gap-2.5 sm:gap-4 overflow-hidden">
                     <img src={p.image} className="w-9 h-9 sm:w-12 sm:h-12 rounded-lg object-cover flex-shrink-0" alt={p.name} />
                     <div className="overflow-hidden">
                       <p className="font-bold text-[10px] sm:text-sm text-gray-900 truncate">{p.name}</p>
-                      <p className="text-[8px] sm:text-[10px] text-gray-400 uppercase font-black truncate">R$ {p.price.toFixed(2)}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-[8px] sm:text-[10px] text-orange-600 font-black">R$ {p.price.toFixed(2)}</p>
+                        <span className="text-[7px] sm:text-[9px] text-gray-400 px-1.5 py-0.5 bg-gray-50 rounded uppercase font-bold">{p.category}</span>
+                      </div>
                     </div>
                   </div>
                   <div className="flex gap-1 sm:gap-2 flex-shrink-0">
-                    <button onClick={() => saveProductToDb({...p, available: !p.available})} className={`p-1.5 rounded-lg ${p.available ? 'text-emerald-500 hover:bg-emerald-50' : 'text-red-500 hover:bg-red-50'}`}><Power size={14}/></button>
+                    <button onClick={() => saveProductToDb({...p, available: !p.available})} className={`p-1.5 rounded-lg ${p.available ? 'text-emerald-500 hover:bg-emerald-50' : 'text-red-500 hover:bg-red-50'}`} title={p.available ? 'Disponível' : 'Indisponível'}><Power size={14}/></button>
                     <button onClick={() => setEditingProduct(p)} className="p-1.5 text-gray-400 hover:text-orange-500 hover:bg-orange-50 rounded-lg"><Edit2 size={14}/></button>
                     <button onClick={() => confirm("Remover?") && deleteProductFromDb(p.id)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={14}/></button>
                   </div>
@@ -543,26 +570,39 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
         )}
 
         {activeTab === 'categories' && (
-          <div className="bg-white p-3 sm:p-6 rounded-xl border border-gray-100 shadow-sm space-y-4 animate-in fade-in duration-300">
-             <h2 className="font-black text-gray-900 text-xs sm:text-lg uppercase tracking-wider">Categorias</h2>
+          <div className="bg-white p-4 sm:p-6 rounded-xl border border-gray-100 shadow-sm space-y-4 animate-in fade-in duration-300">
+             <div className="flex items-center justify-between">
+                <h2 className="font-black text-gray-900 text-xs sm:text-lg uppercase tracking-wider">Categorias do Cardápio</h2>
+                <Tags size={18} className="text-gray-300" />
+             </div>
+             <p className="text-[9px] sm:text-[11px] text-gray-500">Adicione ou remova as categorias que aparecerão no topo do cardápio.</p>
              <div className="flex gap-1.5">
                <input 
                  className="flex-1 p-2.5 bg-gray-50 rounded-lg text-[10px] sm:text-sm border-transparent focus:border-orange-200 border outline-none" 
-                 placeholder="Ex: Marmitas..." 
+                 placeholder="Nova categoria..." 
                  value={newCategoryName}
                  onChange={e => setNewCategoryName(e.target.value)}
+                 onKeyDown={e => e.key === 'Enter' && addCategory()}
                />
-               <button onClick={addCategory} className="bg-gray-900 text-white px-3 sm:px-6 rounded-lg text-[9px] sm:text-xs font-bold">Add</button>
+               <button onClick={addCategory} className="bg-gray-900 text-white px-3 sm:px-6 rounded-lg text-[9px] sm:text-xs font-bold hover:bg-black transition-colors">Adicionar</button>
              </div>
              <div className="grid grid-cols-1 gap-2">
-               {tempSettings.categories.map(cat => (
-                 <div key={cat} className="flex items-center justify-between p-2.5 bg-gray-50 rounded-lg border border-gray-100">
-                    <span className="text-[9px] sm:text-xs font-bold text-gray-700">{cat}</span>
-                    <button onClick={() => removeCategory(cat)} className="text-red-400 p-1"><X size={12}/></button>
+               {tempSettings.categories.length === 0 && <p className="text-center py-4 text-gray-400 text-[10px]">Nenhuma categoria.</p>}
+               {tempSettings.categories.map((cat, idx) => (
+                 <div key={cat} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100 group">
+                    <div className="flex items-center gap-3">
+                       <span className="text-gray-300 font-mono text-[9px]">{idx + 1}</span>
+                       <span className="text-[10px] sm:text-xs font-bold text-gray-700">{cat}</span>
+                    </div>
+                    <button onClick={() => removeCategory(cat)} className="text-gray-300 hover:text-red-500 p-1 transition-colors"><Trash2 size={14}/></button>
                  </div>
                ))}
              </div>
-             <button onClick={() => handleSaveSettings()} className="w-full py-2.5 sm:py-4 bg-orange-500 text-white rounded-lg sm:rounded-xl font-bold text-[9px] sm:text-xs shadow-md shadow-orange-50">SALVAR CATEGORIAS</button>
+             <div className="pt-2">
+                <button onClick={() => handleSaveSettings()} className="w-full py-3 sm:py-4 bg-orange-500 text-white rounded-lg sm:rounded-xl font-bold text-[10px] sm:text-xs shadow-md shadow-orange-100 hover:bg-orange-600 transition-all flex items-center justify-center gap-2">
+                  <Database size={14} /> SALVAR CATEGORIAS NO FIREBASE
+                </button>
+             </div>
           </div>
         )}
 
@@ -605,7 +645,7 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
                      <div className="w-16 h-16 sm:w-24 sm:h-24 rounded-xl bg-gray-50 overflow-hidden border-2 border-dashed border-gray-200 flex items-center justify-center">
                        {tempSettings.photoUrl ? <img src={tempSettings.photoUrl} className="w-full h-full object-cover" /> : <ImageIcon className="text-gray-300" size={24}/>}
                      </div>
-                     <button onClick={() => fileInputLogoRef.current?.click()} className="absolute -bottom-1 -right-1 bg-orange-500 text-white p-1.5 rounded-lg shadow-md"><Camera size={12}/></button>
+                     <button onClick={() => fileInputLogoRef.current?.click()} className="absolute -bottom-1 -right-1 bg-orange-500 text-white p-1.5 rounded-lg shadow-md hover:scale-110 transition-transform"><Camera size={12}/></button>
                      <input type="file" ref={fileInputLogoRef} hidden accept="image/*" onChange={handleLogoUpload} />
                   </div>
                   <p className="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase tracking-widest">Logo da Loja</p>
@@ -616,8 +656,8 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
                  <input className="w-full p-2.5 sm:p-4 bg-gray-50 rounded-lg sm:rounded-xl text-[10px] sm:text-sm font-bold border-transparent focus:border-orange-200 border outline-none" value={tempSettings.name} onChange={e => setTempSettings({...tempSettings, name: e.target.value})} />
                </label>
 
-               <button onClick={() => handleSaveSettings()} disabled={saving} className="w-full py-2.5 sm:py-4 bg-gray-900 text-white rounded-lg sm:rounded-xl font-black text-[9px] sm:text-xs uppercase shadow-lg shadow-gray-100">
-                 {saving ? '...' : 'Salvar Dados'}
+               <button onClick={() => handleSaveSettings()} disabled={saving} className="w-full py-2.5 sm:py-4 bg-gray-900 text-white rounded-lg sm:rounded-xl font-black text-[9px] sm:text-xs uppercase shadow-lg shadow-gray-100 disabled:opacity-50">
+                 {saving ? 'Gravando...' : 'Salvar Dados'}
                </button>
             </div>
           </div>
@@ -628,7 +668,7 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-lg p-4 sm:p-8 rounded-2xl sm:rounded-3xl space-y-4 shadow-2xl relative max-h-[92vh] flex flex-col overflow-hidden">
              <button onClick={() => setEditingProduct(null)} className="absolute top-2 right-2 p-2 hover:bg-gray-100 rounded-full"><X size={18}/></button>
-             <h3 className="font-black text-sm sm:text-xl text-gray-900 uppercase pr-8">{editingProduct.id ? 'Editar' : 'Novo'} Item</h3>
+             <h3 className="font-black text-sm sm:text-xl text-gray-900 uppercase pr-8">{editingProduct.id ? 'Editar' : 'Novo'} Item do Cardápio</h3>
              
              <div className="flex-1 overflow-y-auto no-scrollbar space-y-4 pb-2 pr-1">
                 <div className="flex justify-center">
@@ -649,8 +689,8 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
 
                 <div className="space-y-3">
                   <label className="block space-y-1">
-                    <span className="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase">Nome</span>
-                    <input className="w-full p-2.5 sm:p-4 bg-gray-50 rounded-lg text-[10px] sm:text-sm border-transparent focus:border-orange-200 border outline-none" placeholder="Ex: Batata Cheddar" value={editingProduct.name || ''} onChange={e => setEditingProduct({...editingProduct, name: e.target.value})} />
+                    <span className="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase">Nome do Prato</span>
+                    <input className="w-full p-2.5 sm:p-4 bg-gray-50 rounded-lg text-[10px] sm:text-sm border-transparent focus:border-orange-200 border outline-none" placeholder="Ex: Batata Recheada à Moda" value={editingProduct.name || ''} onChange={e => setEditingProduct({...editingProduct, name: e.target.value})} />
                   </label>
                   
                   <div className="grid grid-cols-2 gap-2 sm:gap-4">
@@ -667,20 +707,20 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
                   </div>
 
                   <label className="block space-y-1">
-                    <span className="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase">Descrição</span>
-                    <textarea className="w-full p-2.5 sm:p-4 bg-gray-50 rounded-lg text-[10px] sm:text-sm h-14 sm:h-20 border-transparent focus:border-orange-200 border outline-none resize-none leading-relaxed" placeholder="Detalhes do prato..." value={editingProduct.description || ''} onChange={e => setEditingProduct({...editingProduct, description: e.target.value})} />
+                    <span className="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase">Descrição Apetitosa</span>
+                    <textarea className="w-full p-2.5 sm:p-4 bg-gray-50 rounded-lg text-[10px] sm:text-sm h-14 sm:h-20 border-transparent focus:border-orange-200 border outline-none resize-none leading-relaxed" placeholder="Fale sobre os ingredientes e o sabor..." value={editingProduct.description || ''} onChange={e => setEditingProduct({...editingProduct, description: e.target.value})} />
                   </label>
 
                   <div className="flex items-center gap-2.5 bg-gray-50 p-2.5 sm:p-4 rounded-lg">
                     <input type="checkbox" id="avail-adm" checked={editingProduct.available !== false} onChange={e => setEditingProduct({...editingProduct, available: e.target.checked})} className="w-4 h-4 rounded text-orange-500" />
-                    <label htmlFor="avail-adm" className="text-[9px] sm:text-xs font-bold text-gray-700 cursor-pointer">Disponível para venda?</label>
+                    <label htmlFor="avail-adm" className="text-[9px] sm:text-xs font-bold text-gray-700 cursor-pointer">Disponível no cardápio online?</label>
                   </div>
                 </div>
              </div>
              <div className="flex gap-2 sm:gap-3 pt-3 border-t mt-auto">
-                <button onClick={() => setEditingProduct(null)} className="flex-1 py-2.5 sm:py-4 font-black text-gray-400 text-[9px] sm:text-xs uppercase hover:bg-gray-50 rounded-lg">Sair</button>
-                <button onClick={handleSaveProduct} disabled={saving} className="flex-[2] py-2.5 sm:py-4 bg-orange-500 text-white rounded-lg sm:rounded-xl font-black text-[9px] sm:text-xs uppercase shadow-md shadow-orange-50">
-                  {saving ? '...' : 'Salvar Alterações'}
+                <button onClick={() => setEditingProduct(null)} className="flex-1 py-2.5 sm:py-4 font-black text-gray-400 text-[9px] sm:text-xs uppercase hover:bg-gray-50 rounded-lg">Cancelar</button>
+                <button onClick={handleSaveProduct} disabled={saving} className="flex-[2] py-2.5 sm:py-4 bg-orange-500 text-white rounded-lg sm:rounded-xl font-black text-[9px] sm:text-xs uppercase shadow-md shadow-orange-50 disabled:opacity-50 flex items-center justify-center gap-2">
+                  {saving ? '...' : <><Database size={14}/> Gravar Item</>}
                 </button>
              </div>
           </div>

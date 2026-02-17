@@ -1,6 +1,6 @@
 
 import { initializeApp, getApps, getApp, FirebaseApp } from "@firebase/app";
-import { getFirestore, collection, setDoc, doc, getDoc, deleteDoc, onSnapshot, Firestore } from "@firebase/firestore";
+import { getFirestore, collection, setDoc, doc, getDoc, deleteDoc, onSnapshot, Firestore, query, orderBy, getDocs, writeBatch } from "@firebase/firestore";
 import { Product, BusinessSettings } from "../types";
 import { INITIAL_PRODUCTS, DEFAULT_SETTINGS } from "../constants";
 
@@ -22,7 +22,7 @@ const initFirebase = (): { app: FirebaseApp | null, db: Firestore | null } => {
     }
     
     if (!firebaseConfig.apiKey) {
-      console.warn("Firebase não configurado. Entrando em modo Mock (LocalStorage).");
+      console.warn("Firebase não configurado. Usando Mock (LocalStorage).");
       return { app: null, db: null };
     }
     
@@ -42,6 +42,26 @@ const SETTINGS_COL = "settings";
 const USERS_COL = "users";
 
 const isMockMode = !db;
+
+// Função para popular o banco de dados pela primeira vez se estiver vazio
+export const seedDatabase = async () => {
+  if (isMockMode || !db) return;
+  
+  const settingsRef = doc(db, SETTINGS_COL, "general");
+  const settingsSnap = await getDoc(settingsRef);
+  
+  if (!settingsSnap.exists()) {
+    await setDoc(settingsRef, DEFAULT_SETTINGS);
+    
+    const batch = writeBatch(db);
+    INITIAL_PRODUCTS.forEach((p) => {
+      const pRef = doc(collection(db, PRODUCTS_COL), p.id);
+      batch.set(pRef, p);
+    });
+    await batch.commit();
+    console.log("Database seeded with default menu.");
+  }
+};
 
 export const checkAdminStatus = async (email: string): Promise<boolean> => {
   if (!email) return false;
@@ -82,6 +102,7 @@ export const subscribeProducts = (callback: (products: Product[]) => void) => {
     window.addEventListener('storage', h);
     return () => window.removeEventListener('storage', h);
   }
+  
   return onSnapshot(collection(db, PRODUCTS_COL), (snap) => {
     if (snap.empty) {
       callback(INITIAL_PRODUCTS);
@@ -121,7 +142,9 @@ export const subscribeSettings = (callback: (s: BusinessSettings) => void) => {
     window.addEventListener('storage', h);
     return () => window.removeEventListener('storage', h);
   }
-  return onSnapshot(doc(db, SETTINGS_COL, "general"), (snap) => snap.exists() ? callback(snap.data() as BusinessSettings) : callback(DEFAULT_SETTINGS));
+  return onSnapshot(doc(db, SETTINGS_COL, "general"), (snap) => {
+    snap.exists() ? callback(snap.data() as BusinessSettings) : callback(DEFAULT_SETTINGS);
+  });
 };
 
 export const saveSettings = async (s: BusinessSettings) => {
