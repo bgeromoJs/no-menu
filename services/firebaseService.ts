@@ -69,13 +69,15 @@ export const seedDatabase = async () => {
   if (!settingsSnap.exists()) {
     await setDoc(settingsRef, DEFAULT_SETTINGS);
     
-    const batch = writeBatch(db);
-    INITIAL_PRODUCTS.forEach((p) => {
-      const pRef = doc(collection(db, PRODUCTS_COL), p.id);
-      batch.set(pRef, p);
-    });
-    await batch.commit();
-    console.log("✅ Database seeded com cardápio padrão.");
+    if (INITIAL_PRODUCTS.length > 0) {
+      const batch = writeBatch(db);
+      INITIAL_PRODUCTS.forEach((p) => {
+        const pRef = doc(collection(db, PRODUCTS_COL), p.id);
+        batch.set(pRef, p);
+      });
+      await batch.commit();
+    }
+    console.log("✅ Database seeded.");
   }
 };
 
@@ -120,17 +122,13 @@ export const subscribeProducts = (callback: (products: Product[]) => void) => {
   }
   
   return onSnapshot(collection(db, PRODUCTS_COL), (snap) => {
-    if (snap.empty) {
-      callback(INITIAL_PRODUCTS);
-    } else {
-      callback(snap.docs.map(d => d.data() as Product));
-    }
+    callback(snap.docs.map(d => d.data() as Product));
   });
 };
 
 export const saveProductToDb = async (p: Product) => {
   if (isMockMode || !db) {
-    const list = JSON.parse(localStorage.getItem(PRODUCTS_COL) || JSON.stringify(INITIAL_PRODUCTS));
+    const list = JSON.parse(localStorage.getItem(PRODUCTS_COL) || "[]");
     const idx = list.findIndex((i: any) => i.id === p.id);
     idx > -1 ? list[idx] = p : list.push(p);
     localStorage.setItem(PRODUCTS_COL, JSON.stringify(list));

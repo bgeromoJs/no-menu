@@ -38,7 +38,6 @@ import {
   saveSettings,
   checkAdminStatus,
   syncUser,
-  seedDatabase,
   isMockMode
 } from './services/firebaseService';
 
@@ -565,18 +564,6 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
     await handleSaveSettings(updated);
   };
 
-  const handleSeed = async () => {
-    try {
-      setSaving(true);
-      await seedDatabase();
-      showToast("Dados iniciais carregados!");
-    } catch (e) {
-      showToast("Erro ao carregar iniciais.", "error");
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const confirmDelete = async () => {
     if (deleteTargetId) {
       try {
@@ -652,7 +639,6 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
             <div className="flex justify-between items-center px-1">
               <h2 className="font-black text-gray-900 flex items-center gap-1.5 text-xs sm:text-lg">Gerenciar Cardápio</h2>
               <div className="flex gap-2">
-                 <button onClick={handleSeed} disabled={saving} className="text-gray-400 hover:text-blue-500 p-2 disabled:opacity-50"><Database size={16} /></button>
                  <button onClick={() => setEditingProduct({ available: true, category: tempSettings.categories[0] })} className="bg-orange-500 text-white px-2.5 sm:px-4 py-1.5 rounded-lg text-[9px] sm:text-xs font-bold shadow-md shadow-orange-50 hover:bg-orange-600">+ Novo Item</button>
               </div>
             </div>
