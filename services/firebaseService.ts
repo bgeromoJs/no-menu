@@ -39,8 +39,40 @@ export { db };
 
 const PRODUCTS_COL = "products";
 const SETTINGS_COL = "settings";
+const USERS_COL = "users";
 
 const isMockMode = !db;
+
+export const checkAdminStatus = async (email: string): Promise<boolean> => {
+  if (!email) return false;
+  if (isMockMode) return email === "admin@teste.com";
+  try {
+    const snap = await getDoc(doc(db!, USERS_COL, email));
+    return snap.exists() ? snap.data().isAdmin === true : false;
+  } catch (e) {
+    console.error("Erro ao verificar admin:", e);
+    return false;
+  }
+};
+
+export const syncUser = async (user: { email: string, name: string, picture: string }) => {
+  if (isMockMode) return;
+  try {
+    const userRef = doc(db!, USERS_COL, user.email);
+    const snap = await getDoc(userRef);
+    if (!snap.exists()) {
+      await setDoc(userRef, {
+        email: user.email,
+        name: user.name,
+        picture: user.picture,
+        isAdmin: false,
+        createdAt: new Date().toISOString()
+      });
+    }
+  } catch (e) {
+    console.error("Erro ao sincronizar usuário:", e);
+  }
+};
 
 export const subscribeProducts = (callback: (products: Product[]) => void) => {
   if (isMockMode || !db) {

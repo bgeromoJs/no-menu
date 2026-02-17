@@ -4,7 +4,6 @@ import {
   ShoppingCart, 
   LayoutDashboard, 
   Utensils, 
-  ArrowLeft, 
   Plus, 
   Minus, 
   Trash2, 
@@ -12,36 +11,44 @@ import {
   ChevronRight,
   RefreshCw,
   Edit2,
-  FlaskConical,
   Power,
-  Settings as SettingsIcon,
   Image as ImageIcon,
-  Calendar,
   Upload,
-  CheckCircle2,
   Tags,
-  CreditCard,
-  Banknote,
-  Smartphone,
   LogOut,
   MessageSquare,
   ShieldAlert,
-  ChefHat,
   LogIn,
   Clock,
   Store,
-  Camera,
-  CircleDot
+  Camera
 } from 'lucide-react';
-import { Product, CartItem, ViewMode, BusinessSettings, OperatingHour } from './types';
+import { Product, CartItem, ViewMode, BusinessSettings } from './types';
 import { ADMIN_PHONE, WEEK_DAYS, DEFAULT_SETTINGS } from './constants';
 import { 
   subscribeProducts, 
   saveProductToDb, 
   deleteProductFromDb,
   subscribeSettings,
-  saveSettings
+  saveSettings,
+  checkAdminStatus,
+  syncUser
 } from './services/firebaseService';
+
+declare var google: any;
+
+const parseJwt = (token: string) => {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+    return JSON.parse(jsonPayload);
+  } catch (e) {
+    return null;
+  }
+};
 
 const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -54,6 +61,9 @@ const fileToBase64 = (file: File): Promise<string> => {
 
 export default function App() {
   const [isInitializing, setIsInitializing] = useState(true);
+  const [user, setUser] = useState<{ email: string, name: string, picture: string } | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.CUSTOMER);
   const [products, setProducts] = useState<Product[]>([]);
   const [settings, setSettings] = useState<BusinessSettings>(DEFAULT_SETTINGS);
@@ -68,6 +78,42 @@ export default function App() {
     address: '',
     paymentMethod: 'Pix' as 'Pix' | 'Cartão' | 'Dinheiro'
   });
+
+  // Inicialização do Google Login
+  useEffect(() => {
+    const savedUser = localStorage.getItem('user_session');
+    if (savedUser) {
+      const u = JSON.parse(savedUser);
+      setUser(u);
+      checkAdminStatus(u.email).then(setIsAdmin);
+    }
+
+    const initGsi = () => {
+      if (typeof google !== 'undefined') {
+        google.accounts.id.initialize({
+          client_id: process.env.GOOGLE_CLIENT_ID,
+          callback: async (response: any) => {
+            const payload = parseJwt(response.credential);
+            if (payload) {
+              const userData = {
+                email: payload.email,
+                name: payload.name,
+                picture: payload.picture
+              };
+              setUser(userData);
+              localStorage.setItem('user_session', JSON.stringify(userData));
+              const admin = await checkAdminStatus(userData.email);
+              setIsAdmin(admin);
+              await syncUser(userData);
+            }
+          }
+        });
+      } else {
+        setTimeout(initGsi, 500);
+      }
+    };
+    initGsi();
+  }, []);
 
   useEffect(() => {
     const unsubProducts = subscribeProducts((p) => {
@@ -97,6 +143,17 @@ export default function App() {
 
   const cartTotal = useMemo(() => cart.reduce((acc, item) => acc + (item.product.price * item.quantity), 0), [cart]);
   const cartItemCount = useMemo(() => cart.reduce((a, b) => a + b.quantity, 0), [cart]);
+
+  const handleLogin = () => {
+    google.accounts.id.prompt();
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    setIsAdmin(false);
+    setViewMode(ViewMode.CUSTOMER);
+    localStorage.removeItem('user_session');
+  };
 
   const addToCart = (product: Product) => {
     if (!shopStatus.open) return;
@@ -151,12 +208,29 @@ export default function App() {
           </div>
           
           <div className="flex items-center gap-1.5 sm:gap-3">
-            <button 
-              onClick={() => setViewMode(prev => prev === ViewMode.CUSTOMER ? ViewMode.ADMIN : ViewMode.CUSTOMER)}
-              className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all border shadow-sm ${viewMode === ViewMode.ADMIN ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-200 hover:border-orange-200'}`}
-            >
-              {viewMode === ViewMode.CUSTOMER ? <><LayoutDashboard size={14} /> <span>Painel</span></> : <><Utensils size={14} /> <span>Cardápio</span></>}
-            </button>
+            {isAdmin && (
+              <button 
+                onClick={() => setViewMode(prev => prev === ViewMode.CUSTOMER ? ViewMode.ADMIN : ViewMode.CUSTOMER)}
+                className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all border shadow-sm ${viewMode === ViewMode.ADMIN ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-200 hover:border-orange-200'}`}
+              >
+                {viewMode === ViewMode.CUSTOMER ? <><LayoutDashboard size={14} /> <span>Painel</span></> : <><Utensils size={14} /> <span>Cardápio</span></>}
+              </button>
+            )}
+
+            {user ? (
+              <div className="flex items-center gap-2">
+                <img src={user.picture} className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-gray-100 shadow-sm" alt="Foto" />
+                <button onClick={handleLogout} className="text-gray-400 hover:text-red-500 transition-colors p-1"><LogOut size={16}/></button>
+              </div>
+            ) : (
+              <button 
+                onClick={handleLogin}
+                className="flex items-center gap-1.5 bg-gray-50 text-gray-600 px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold border border-gray-200 hover:bg-gray-100 transition-all shadow-sm"
+              >
+                <LogIn size={14}/>
+                <span>Acessar</span>
+              </button>
+            )}
           </div>
         </div>
       </header>
