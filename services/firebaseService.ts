@@ -7,20 +7,14 @@ import { INITIAL_PRODUCTS, DEFAULT_SETTINGS } from "../constants";
 
 declare var google: any;
 
-const getFirebaseConfig = () => {
-  try {
-    const config = process.env.FIREBASE_CONFIG;
-    if (!config || config === '{"apiKey":"","authDomain":"","projectId":"","storageBucket":"","messagingSenderId":"","appId":""}') {
-      return null;
-    }
-    return typeof config === 'string' ? JSON.parse(config) : config;
-  } catch (e) {
-    console.error("Erro ao parsear FIREBASE_CONFIG:", e);
-    return null;
-  }
+const firebaseConfig = {
+  apiKey: process.env.FIREBASE_API_KEY,
+  authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.FIREBASE_PROJECT_ID,
+  storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.FIREBASE_APP_ID
 };
-
-const firebaseConfig = getFirebaseConfig();
 
 const initFirebase = (): { app: FirebaseApp | null, db: Firestore | null, auth: Auth | null } => {
   try {
@@ -30,8 +24,8 @@ const initFirebase = (): { app: FirebaseApp | null, db: Firestore | null, auth: 
       return { app, db: getFirestore(app), auth: getAuth(app) };
     }
     
-    if (!firebaseConfig || !firebaseConfig.apiKey) {
-      console.warn("Firebase não configurado. Entrando em modo Mock (LocalStorage).");
+    if (!firebaseConfig.apiKey) {
+      console.warn("Firebase não configurado com chaves individuais. Entrando em modo Mock.");
       return { app: null, db: null, auth: null };
     }
     
@@ -52,10 +46,6 @@ const USERS_COL = "users";
 
 const isMockMode = !db || !auth;
 
-/**
- * Sincroniza o usuário logado com o Firestore.
- * Se for o primeiro acesso, cria o perfil com isAdmin: false.
- */
 const syncUserToDb = async (user: any) => {
   if (isMockMode || !db) return;
   try {
@@ -69,7 +59,6 @@ const syncUserToDb = async (user: any) => {
         isAdmin: false,
         createdAt: new Date().toISOString()
       });
-      console.log("Novo usuário cadastrado no Firestore.");
     }
   } catch (e) {
     console.error("Erro ao sincronizar usuário:", e);
@@ -100,14 +89,12 @@ export const loginWithGoogle = async (): Promise<any | null> => {
             await syncUserToDb(result.user);
             resolve(result.user);
           } catch (error) {
-            console.error("Erro na troca de credenciais:", error);
             reject(error);
           }
         }
       });
       google.accounts.id.prompt();
     } catch (error) {
-      console.error("Erro GSI:", error);
       reject(error);
     }
   });
@@ -156,7 +143,6 @@ export const checkAdminStatus = async (email: string): Promise<boolean> => {
   }
 };
 
-// --- CRUD ---
 export const subscribeProducts = (callback: (products: Product[]) => void) => {
   if (isMockMode || !db) {
     const data = JSON.parse(localStorage.getItem(PRODUCTS_COL) || JSON.stringify(INITIAL_PRODUCTS));

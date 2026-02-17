@@ -30,7 +30,8 @@ import {
   LogIn,
   Clock,
   Store,
-  Camera
+  Camera,
+  CircleDot
 } from 'lucide-react';
 import { Product, CartItem, ViewMode, BusinessSettings, OperatingHour } from './types';
 import { ADMIN_PHONE, WEEK_DAYS, DEFAULT_SETTINGS } from './constants';
@@ -165,47 +166,47 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
-      <header className="bg-white border-b border-gray-100 sticky top-0 z-50 px-4 py-3">
+      <header className="bg-white border-b border-gray-100 sticky top-0 z-50 px-3 py-3">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
              {settings.photoUrl ? (
-               <img src={settings.photoUrl} className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg object-cover border border-gray-100" alt="Logo" />
+               <img src={settings.photoUrl} className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg object-cover border border-gray-100" alt="Logo" />
              ) : (
-               <div className="w-9 h-9 sm:w-10 sm:h-10 bg-orange-500 rounded-lg flex items-center justify-center text-white font-bold">V</div>
+               <div className="w-8 h-8 sm:w-10 sm:h-10 bg-orange-500 rounded-lg flex items-center justify-center text-white font-bold text-xs">V</div>
              )}
              <div>
-               <h1 className="text-xs sm:text-base font-bold text-gray-900 leading-tight truncate max-w-[120px] sm:max-w-none">{settings.name}</h1>
-               <div className="flex items-center gap-1.5">
-                 <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${shopStatus.open ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
-                 <p className={`text-[9px] sm:text-[10px] font-bold ${shopStatus.open ? 'text-emerald-600' : 'text-red-500'}`}>{shopStatus.reason}</p>
+               <h1 className="text-[11px] sm:text-base font-bold text-gray-900 leading-tight truncate max-w-[100px] sm:max-w-none">{settings.name}</h1>
+               <div className="flex items-center gap-1">
+                 <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${shopStatus.open ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></div>
+                 <p className={`text-[8px] sm:text-[10px] font-bold ${shopStatus.open ? 'text-emerald-600' : 'text-red-500'}`}>{shopStatus.reason}</p>
                </div>
              </div>
           </div>
           
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3">
             {isAdmin && (
               <button 
                 onClick={() => setViewMode(prev => prev === ViewMode.CUSTOMER ? ViewMode.ADMIN : ViewMode.CUSTOMER)}
-                className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all ${viewMode === ViewMode.ADMIN ? 'bg-orange-500 text-white shadow-lg shadow-orange-100' : 'bg-orange-50 text-orange-600'}`}
+                className={`flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-lg text-[9px] sm:text-xs font-bold transition-all ${viewMode === ViewMode.ADMIN ? 'bg-orange-500 text-white shadow-lg shadow-orange-100' : 'bg-orange-50 text-orange-600'}`}
               >
-                {viewMode === ViewMode.CUSTOMER ? <><LayoutDashboard size={14} /> <span className="hidden sm:inline">Painel</span></> : <><Utensils size={14} /> <span className="hidden sm:inline">Cardápio</span></>}
+                {viewMode === ViewMode.CUSTOMER ? <><LayoutDashboard size={12} /> <span className="hidden xs:inline">Painel</span></> : <><Utensils size={12} /> <span className="hidden xs:inline">Cardápio</span></>}
               </button>
             )}
 
             {currentUser ? (
-              <div className="flex items-center gap-2">
-                <img src={currentUser.photoURL} className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-gray-100" alt="Perfil" />
+              <div className="flex items-center gap-1.5">
+                <img src={currentUser.photoURL} className="w-6 h-6 sm:w-8 sm:h-8 rounded-full border border-gray-100" alt="Perfil" />
                 <button onClick={() => confirm("Deseja sair?") && logout()} className="text-gray-400 hover:text-red-500 transition-colors">
-                  <LogOut size={16} />
+                  <LogOut size={14} />
                 </button>
               </div>
             ) : (
               <button 
                 onClick={handleLogin}
                 disabled={isLoggingIn}
-                className="flex items-center gap-2 bg-orange-500 text-white px-3 sm:px-4 py-2 rounded-lg text-[10px] sm:text-xs font-bold hover:bg-orange-600 transition-all disabled:opacity-50"
+                className="flex items-center gap-1.5 bg-orange-500 text-white px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[9px] sm:text-xs font-bold hover:bg-orange-600 transition-all disabled:opacity-50"
               >
-                {isLoggingIn ? <RefreshCw size={14} className="animate-spin" /> : <LogIn size={14} />}
+                {isLoggingIn ? <RefreshCw size={12} className="animate-spin" /> : <LogIn size={12} />}
                 <span>Entrar</span>
               </button>
             )}
@@ -213,67 +214,67 @@ export default function App() {
         </div>
       </header>
 
-      <main className="flex-1 max-w-4xl mx-auto w-full p-3 sm:p-4">
+      <main className="flex-1 max-w-4xl mx-auto w-full p-2 sm:p-4">
         {loadingMenu ? (
           <div className="py-20 text-center"><RefreshCw className="animate-spin mx-auto text-gray-300" /></div>
         ) : viewMode === ViewMode.CUSTOMER ? (
-          <div className="space-y-6">
-            <div className="flex gap-2 overflow-x-auto no-scrollbar py-2 -mx-1 px-1">
+          <div className="space-y-4 sm:space-y-6">
+            <div className="flex gap-2 overflow-x-auto no-scrollbar py-1 -mx-1 px-1">
               {settings.categories.map(cat => (
                 <button
                   key={cat}
                   onClick={() => setSelectedCategory(cat)}
-                  className={`px-3 sm:px-4 py-2 rounded-full text-[10px] sm:text-xs font-bold whitespace-nowrap transition-all border ${selectedCategory === cat ? 'bg-gray-900 text-white border-gray-900 shadow-lg shadow-gray-200' : 'bg-white text-gray-500 border-gray-200 hover:border-orange-200'}`}
+                  className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-xs font-bold whitespace-nowrap transition-all border ${selectedCategory === cat ? 'bg-gray-900 text-white border-gray-900 shadow-lg shadow-gray-200' : 'bg-white text-gray-500 border-gray-200 hover:border-orange-200'}`}
                 >
                   {cat}
                 </button>
               ))}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 pb-24">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-24">
               {products.filter(p => p.category === selectedCategory).map(product => {
                 const inCart = cart.find(i => i.product.id === product.id);
                 return (
                   <div key={product.id} className="bg-white rounded-2xl overflow-hidden border border-gray-100 flex flex-col group shadow-sm hover:shadow-md transition-all">
-                    <div className="h-36 sm:h-40 overflow-hidden relative">
+                    <div className="h-32 sm:h-40 overflow-hidden relative">
                       <img src={product.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt={product.name} />
-                      {!shopStatus.open && <div className="absolute inset-0 bg-black/40 flex items-center justify-center text-white font-bold text-xs backdrop-blur-[2px]">FECHADO</div>}
-                      {!product.available && <div className="absolute top-2 right-2 bg-red-500 text-white px-2 py-1 rounded-md text-[10px] font-bold">ESGOTADO</div>}
+                      {!shopStatus.open && <div className="absolute inset-0 bg-black/40 flex items-center justify-center text-white font-bold text-[10px] backdrop-blur-[2px]">FECHADO</div>}
+                      {!product.available && <div className="absolute top-2 right-2 bg-red-500 text-white px-1.5 py-0.5 rounded text-[8px] font-bold">ESGOTADO</div>}
                       {inCart && (
-                        <div className="absolute top-2 left-2 bg-orange-500 text-white px-2 py-1 rounded-md text-[10px] font-black shadow-lg animate-bounce">
-                          {inCart.quantity}x no pedido
+                        <div className="absolute top-2 left-2 bg-orange-500 text-white px-2 py-1 rounded text-[9px] font-black shadow-lg">
+                          {inCart.quantity}x
                         </div>
                       )}
                     </div>
                     <div className="p-3 sm:p-4 flex-1 flex flex-col">
                       <div className="flex justify-between items-start mb-1">
-                        <h3 className="font-bold text-gray-900 text-xs sm:text-sm">{product.name}</h3>
-                        <span className="text-orange-600 font-black text-xs sm:text-sm whitespace-nowrap">R$ {product.price.toFixed(2)}</span>
+                        <h3 className="font-bold text-gray-900 text-[11px] sm:text-sm truncate pr-2">{product.name}</h3>
+                        <span className="text-orange-600 font-black text-[11px] sm:text-sm whitespace-nowrap">R$ {product.price.toFixed(2)}</span>
                       </div>
-                      <p className="text-[10px] sm:text-xs text-gray-500 line-clamp-2 mb-3 sm:mb-4 flex-1 leading-relaxed">{product.description}</p>
+                      <p className="text-[9px] sm:text-xs text-gray-500 line-clamp-2 mb-3 flex-1 leading-relaxed">{product.description}</p>
                       
                       {inCart ? (
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
                           <button 
                             onClick={() => removeFromCart(product.id)}
-                            className="flex-1 py-2 sm:py-2.5 rounded-xl bg-orange-50 text-orange-600 font-bold text-[10px] sm:text-xs flex items-center justify-center gap-2 border border-orange-100"
+                            className="flex-1 py-1.5 sm:py-2.5 rounded-lg sm:rounded-xl bg-orange-50 text-orange-600 font-bold text-[9px] sm:text-xs flex items-center justify-center gap-1 border border-orange-100"
                           >
-                            <Minus size={14} /> Remover
+                            <Minus size={12} /> Menos
                           </button>
                           <button 
                             onClick={() => addToCart(product)}
-                            className="flex-1 py-2 sm:py-2.5 rounded-xl bg-orange-500 text-white font-bold text-[10px] sm:text-xs flex items-center justify-center gap-2 hover:bg-orange-600 shadow-md shadow-orange-100"
+                            className="flex-1 py-1.5 sm:py-2.5 rounded-lg sm:rounded-xl bg-orange-500 text-white font-bold text-[9px] sm:text-xs flex items-center justify-center gap-1 hover:bg-orange-600 shadow-md shadow-orange-50"
                           >
-                            <Plus size={14} /> Mais um
+                            <Plus size={12} /> Mais
                           </button>
                         </div>
                       ) : (
                         <button 
                           onClick={() => addToCart(product)}
                           disabled={!shopStatus.open || !product.available}
-                          className="w-full py-2 sm:py-2.5 rounded-xl bg-orange-500 text-white font-bold text-[10px] sm:text-xs hover:bg-orange-600 transition-colors disabled:bg-gray-100 disabled:text-gray-400 flex items-center justify-center gap-2"
+                          className="w-full py-1.5 sm:py-2.5 rounded-lg sm:rounded-xl bg-orange-500 text-white font-bold text-[9px] sm:text-xs hover:bg-orange-600 transition-colors disabled:bg-gray-100 disabled:text-gray-400 flex items-center justify-center gap-1.5"
                         >
-                          <Plus size={14} /> Adicionar
+                          <Plus size={12} /> Adicionar
                         </button>
                       )}
                     </div>
@@ -290,9 +291,9 @@ export default function App() {
       {cartItemCount > 0 && shopStatus.open && viewMode === ViewMode.CUSTOMER && (
         <div className="fixed bottom-0 inset-x-0 p-3 sm:p-4 bg-white/80 backdrop-blur-md border-t border-gray-100 z-50">
           <div className="max-w-4xl mx-auto">
-            <button onClick={() => setIsCartOpen(true)} className="w-full bg-orange-500 text-white py-3 sm:py-4 rounded-2xl flex items-center justify-between px-4 sm:px-6 font-bold shadow-xl shadow-orange-100 hover:bg-orange-600 transition-colors">
-               <div className="flex items-center gap-2"><ShoppingCart size={18} /><span className="text-xs sm:text-sm">Ver Pedido ({cartItemCount})</span></div>
-               <span className="text-xs sm:text-sm">R$ {cartTotal.toFixed(2)}</span>
+            <button onClick={() => setIsCartOpen(true)} className="w-full bg-orange-500 text-white py-3 sm:py-4 rounded-xl sm:rounded-2xl flex items-center justify-between px-4 sm:px-6 font-bold shadow-xl shadow-orange-100 hover:bg-orange-600 transition-colors">
+               <div className="flex items-center gap-1.5 sm:gap-2"><ShoppingCart size={16} /><span className="text-[10px] sm:text-sm">Pedido ({cartItemCount})</span></div>
+               <span className="text-[10px] sm:text-sm">R$ {cartTotal.toFixed(2)}</span>
             </button>
           </div>
         </div>
@@ -303,64 +304,64 @@ export default function App() {
           <div className="absolute inset-0 bg-black/40" onClick={() => setIsCartOpen(false)} />
           <div className="relative w-full max-w-md bg-white h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
              <div className="p-4 sm:p-6 border-b flex justify-between items-center">
-               <h2 className="font-bold text-base sm:text-lg">Meu Pedido</h2>
-               <button onClick={() => setIsCartOpen(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X size={20}/></button>
+               <h2 className="font-bold text-sm sm:text-lg">Meu Pedido</h2>
+               <button onClick={() => setIsCartOpen(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X size={18}/></button>
              </div>
              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
                 {cart.map(item => (
-                  <div key={item.product.id} className="flex flex-col gap-2 border-b border-gray-50 pb-4">
-                    <div className="flex justify-between font-bold text-xs sm:text-sm">
-                      <div className="flex items-center gap-2 sm:gap-3">
-                        <div className="flex items-center gap-1 border border-gray-200 rounded-lg p-0.5 sm:p-1">
+                  <div key={item.product.id} className="flex flex-col gap-2 border-b border-gray-50 pb-3 sm:pb-4">
+                    <div className="flex justify-between font-bold text-[10px] sm:text-sm">
+                      <div className="flex items-center gap-2 sm:gap-3 overflow-hidden">
+                        <div className="flex items-center gap-1 border border-gray-200 rounded-lg p-0.5 sm:p-1 flex-shrink-0">
                            <button onClick={() => removeFromCart(item.product.id)}><Minus size={10}/></button>
-                           <span className="w-4 sm:w-6 text-center text-[10px] sm:text-xs">{item.quantity}</span>
+                           <span className="w-3 sm:w-6 text-center text-[9px] sm:text-xs">{item.quantity}</span>
                            <button onClick={() => addToCart(item.product)}><Plus size={10}/></button>
                         </div>
-                        <span className="truncate max-w-[150px]">{item.product.name}</span>
+                        <span className="truncate">{item.product.name}</span>
                       </div>
-                      <span>R$ {(item.quantity * item.product.price).toFixed(2)}</span>
+                      <span className="flex-shrink-0">R$ {(item.quantity * item.product.price).toFixed(2)}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <input 
-                        placeholder="Ex: Sem cebola, etc..." 
-                        className="flex-1 text-[10px] sm:text-[11px] p-2 bg-gray-50 rounded-lg border-none outline-none focus:ring-1 focus:ring-orange-200 italic"
+                        placeholder="Ex: Sem cebola..." 
+                        className="flex-1 text-[9px] sm:text-[11px] p-2 bg-gray-50 rounded-lg border-none outline-none focus:ring-1 focus:ring-orange-200 italic"
                         value={item.observations}
                         onChange={(e) => {
                           const obs = e.target.value;
                           setCart(c => c.map(i => i.product.id === item.product.id ? {...i, observations: obs} : i));
                         }}
                       />
-                      <button onClick={() => setCart(c => c.filter(i => i.product.id !== item.product.id))} className="text-red-400 p-2"><Trash2 size={14}/></button>
+                      <button onClick={() => setCart(c => c.filter(i => i.product.id !== item.product.id))} className="text-red-400 p-1"><Trash2 size={12}/></button>
                     </div>
                   </div>
                 ))}
                 {checkoutStep === 1 && (
-                  <div className="space-y-4 pt-4 border-t border-gray-100 animate-in fade-in duration-300">
-                    <h3 className="font-bold text-xs sm:text-sm text-gray-700">Informações de Entrega</h3>
-                    <input className="w-full p-3 sm:p-4 bg-gray-50 rounded-xl text-xs sm:text-sm border-transparent focus:border-orange-200 border transition-colors outline-none" placeholder="Qual seu nome?" value={customerInfo.name} onChange={e => setCustomerInfo({...customerInfo, name: e.target.value})} />
-                    <textarea className="w-full p-3 sm:p-4 bg-gray-50 rounded-xl text-xs sm:text-sm h-20 sm:h-24 border-transparent focus:border-orange-200 border transition-colors outline-none" placeholder="Seu endereço completo" value={customerInfo.address} onChange={e => setCustomerInfo({...customerInfo, address: e.target.value})} />
-                    <h3 className="font-bold text-xs sm:text-sm text-gray-700">Pagamento</h3>
-                    <div className="flex gap-2">
+                  <div className="space-y-3 sm:space-y-4 pt-3 sm:pt-4 border-t border-gray-100 animate-in fade-in duration-300">
+                    <h3 className="font-bold text-[10px] sm:text-sm text-gray-700 uppercase tracking-wider">Entrega</h3>
+                    <input className="w-full p-3 sm:p-4 bg-gray-50 rounded-lg sm:rounded-xl text-[10px] sm:text-sm border-transparent focus:border-orange-200 border transition-colors outline-none" placeholder="Qual seu nome?" value={customerInfo.name} onChange={e => setCustomerInfo({...customerInfo, name: e.target.value})} />
+                    <textarea className="w-full p-3 sm:p-4 bg-gray-50 rounded-lg sm:rounded-xl text-[10px] sm:text-sm h-16 sm:h-24 border-transparent focus:border-orange-200 border transition-colors outline-none" placeholder="Seu endereço completo" value={customerInfo.address} onChange={e => setCustomerInfo({...customerInfo, address: e.target.value})} />
+                    <h3 className="font-bold text-[10px] sm:text-sm text-gray-700 uppercase tracking-wider">Pagamento</h3>
+                    <div className="flex gap-1.5">
                        {['Pix', 'Cartão', 'Dinheiro'].map(m => (
-                         <button key={m} onClick={() => setCustomerInfo({...customerInfo, paymentMethod: m as any})} className={`flex-1 py-2 sm:py-3 text-[9px] sm:text-[10px] font-bold rounded-lg border transition-all ${customerInfo.paymentMethod === m ? 'bg-gray-900 text-white border-gray-900 shadow-md' : 'bg-white text-gray-400 hover:border-gray-300'}`}>{m}</button>
+                         <button key={m} onClick={() => setCustomerInfo({...customerInfo, paymentMethod: m as any})} className={`flex-1 py-2 sm:py-3 text-[8px] sm:text-[10px] font-bold rounded-lg border transition-all ${customerInfo.paymentMethod === m ? 'bg-gray-900 text-white border-gray-900 shadow-md' : 'bg-white text-gray-400 hover:border-gray-300'}`}>{m}</button>
                        ))}
                     </div>
                   </div>
                 )}
              </div>
              <div className="p-4 sm:p-6 bg-gray-50 border-t">
-                <div className="flex justify-between items-center mb-4">
-                   <span className="text-xs sm:text-sm text-gray-500 font-medium">Total do Pedido</span>
-                   <span className="text-lg sm:text-xl font-black text-gray-900">R$ {cartTotal.toFixed(2)}</span>
+                <div className="flex justify-between items-center mb-3 sm:mb-4">
+                   <span className="text-[10px] sm:text-sm text-gray-500 font-medium">Total</span>
+                   <span className="text-base sm:text-xl font-black text-gray-900">R$ {cartTotal.toFixed(2)}</span>
                 </div>
                 <button 
                   onClick={checkoutStep === 0 ? () => setCheckoutStep(1) : handleCheckout}
                   disabled={checkoutStep === 1 && (!customerInfo.name || !customerInfo.address)}
-                  className="w-full py-3 sm:py-4 bg-orange-500 text-white rounded-xl font-bold shadow-lg shadow-orange-100 disabled:opacity-50 hover:bg-orange-600 transition-all flex items-center justify-center gap-2 text-xs sm:text-sm"
+                  className="w-full py-2.5 sm:py-4 bg-orange-500 text-white rounded-lg sm:rounded-xl font-bold shadow-lg shadow-orange-50 disabled:opacity-50 hover:bg-orange-600 transition-all flex items-center justify-center gap-1.5 sm:gap-2 text-[10px] sm:text-sm"
                 >
-                  {checkoutStep === 0 ? <>Continuar <ChevronRight size={16}/></> : <><MessageSquare size={16}/> Enviar WhatsApp</>}
+                  {checkoutStep === 0 ? <>Continuar <ChevronRight size={14}/></> : <><MessageSquare size={14}/> Enviar Pedido</>}
                 </button>
-                {checkoutStep === 1 && <button onClick={() => setCheckoutStep(0)} className="w-full mt-2 text-gray-400 font-bold text-[10px] sm:text-xs p-2">Voltar aos itens</button>}
+                {checkoutStep === 1 && <button onClick={() => setCheckoutStep(0)} className="w-full mt-1.5 text-gray-400 font-bold text-[9px] sm:text-xs p-1.5">Voltar</button>}
              </div>
           </div>
         </div>
@@ -448,175 +449,181 @@ function AdminDashboard({ products, settings, isAdmin }: { products: Product[], 
   };
 
   if (!isAdmin) return (
-    <div className="p-10 text-center flex flex-col items-center justify-center min-h-[50vh]">
-      <ShieldAlert className="mb-4 text-red-500" size={48} />
-      <h2 className="font-bold text-gray-900 text-lg">Acesso Restrito</h2>
-      <p className="text-gray-400 text-xs sm:text-sm">Você precisa ser administrador para ver esta tela.</p>
+    <div className="p-8 text-center flex flex-col items-center justify-center min-h-[40vh]">
+      <ShieldAlert className="mb-3 text-red-500" size={40} />
+      <h2 className="font-bold text-gray-900 text-sm">Acesso Restrito</h2>
+      <p className="text-gray-400 text-[10px] sm:text-xs">Identificamos que você não tem permissão para administrar.</p>
     </div>
   );
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* Botão de Fechamento Manual - Topo do Painel */}
-      <div className="animate-in fade-in duration-500">
-        <button 
-           onClick={toggleManualStatus} 
-           className={`w-full py-4 rounded-2xl font-black text-[11px] sm:text-xs flex items-center justify-center gap-2 sm:gap-3 transition-all shadow-lg ${tempSettings.manualClosed ? 'bg-red-500 text-white shadow-red-100 ring-4 ring-red-50' : 'bg-emerald-500 text-white shadow-emerald-100 ring-4 ring-emerald-50'}`}
-        >
-          {tempSettings.manualClosed ? <><Power size={18}/> LOJA FECHADA MANUALMENTE (CLIQUE PARA ABRIR)</> : <><CheckCircle2 size={18}/> LOJA ABERTA (CLIQUE PARA FECHAR MANUALMENTE)</>}
-        </button>
-        <p className="text-[8px] sm:text-[9px] text-gray-400 text-center mt-2 italic font-medium">Controle de emergência: força o fechamento ignorando todos os horários automáticos.</p>
+      {/* Botão de Status da Loja - Redesenhado para ser Clean e Moderno */}
+      <div className="animate-in fade-in slide-in-from-top-4 duration-700">
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-gray-100 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+           <div className="flex items-center gap-4 text-center sm:text-left">
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${tempSettings.manualClosed ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-500'}`}>
+                {tempSettings.manualClosed ? <ShieldAlert size={24} /> : <Store size={24} />}
+              </div>
+              <div>
+                <h3 className="text-xs sm:text-sm font-bold text-gray-900">Status do Recebimento</h3>
+                <p className="text-[10px] sm:text-xs text-gray-500 font-medium">
+                  {tempSettings.manualClosed ? 'Pedidos desativados manualmente' : 'Sistema operando normalmente'}
+                </p>
+              </div>
+           </div>
+           
+           <button 
+              onClick={toggleManualStatus} 
+              className={`w-full sm:w-auto px-6 py-3 rounded-xl font-bold text-[10px] sm:text-xs transition-all flex items-center justify-center gap-2 group ${tempSettings.manualClosed ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100 hover:bg-emerald-600' : 'bg-red-500 text-white shadow-lg shadow-red-100 hover:bg-red-600'}`}
+           >
+             <Power size={14} className="group-hover:rotate-12 transition-transform" />
+             {tempSettings.manualClosed ? 'REATIVAR LOJA AGORA' : 'DESATIVAR LOJA MANUAL'}
+           </button>
+        </div>
       </div>
 
       <div className="flex bg-white p-1 rounded-xl border border-gray-100 shadow-sm overflow-x-auto no-scrollbar scroll-smooth">
         {[
-          { id: 'menu', icon: Utensils, label: 'Itens' },
+          { id: 'menu', icon: Utensils, label: 'Cardápio' },
           { id: 'categories', icon: Tags, label: 'Categorias' },
           { id: 'hours', icon: Clock, label: 'Horários' },
-          { id: 'settings', icon: Store, label: 'Config Loja' }
+          { id: 'settings', icon: Store, label: 'Dados' }
         ].map(tab => (
           <button 
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)} 
-            className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 py-2 px-3 sm:px-4 rounded-lg text-[10px] sm:text-[11px] font-bold whitespace-nowrap transition-all ${activeTab === tab.id ? 'bg-orange-500 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+            className={`flex-1 flex items-center justify-center gap-1 sm:gap-2 py-2 px-2 sm:px-4 rounded-lg text-[9px] sm:text-[11px] font-bold whitespace-nowrap transition-all ${activeTab === tab.id ? 'bg-orange-500 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
           >
-            <tab.icon size={14} /> {tab.label}
+            <tab.icon size={12} /> {tab.label}
           </button>
         ))}
       </div>
 
-      {activeTab === 'menu' && (
-        <div className="space-y-4 animate-in fade-in duration-300">
-          <div className="flex justify-between items-center px-1">
-            <h2 className="font-black text-gray-900 flex items-center gap-2 text-base sm:text-lg">Cardápio</h2>
-            <button onClick={() => setEditingProduct({ available: true, category: tempSettings.categories[0] })} className="bg-orange-500 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs font-bold shadow-lg shadow-orange-100 hover:bg-orange-600">+ Novo Prato</button>
-          </div>
-          <div className="grid gap-2 sm:gap-3">
-            {products.length === 0 && <div className="p-10 text-center bg-white rounded-2xl border border-dashed border-gray-200 text-gray-400 text-[10px] sm:text-xs">Nenhum produto cadastrado ainda.</div>}
-            {products.map(p => (
-              <div key={p.id} className="bg-white p-3 sm:p-4 rounded-xl flex items-center justify-between border border-gray-100 shadow-sm">
-                <div className="flex items-center gap-3 sm:gap-4 overflow-hidden">
-                  <img src={p.image} className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg object-cover border border-gray-50 flex-shrink-0" alt={p.name} />
-                  <div className="overflow-hidden">
-                    <p className="font-bold text-xs sm:text-sm text-gray-900 truncate">{p.name}</p>
-                    <p className="text-[9px] sm:text-[10px] text-gray-400 uppercase font-black tracking-wider truncate">{p.category} • R$ {p.price.toFixed(2)}</p>
-                  </div>
-                </div>
-                <div className="flex gap-1 sm:gap-2 ml-2">
-                  <button 
-                    onClick={() => saveProductToDb({...p, available: !p.available})}
-                    className={`p-1.5 sm:p-2 rounded-lg transition-colors ${p.available ? 'text-emerald-500 hover:bg-emerald-50' : 'text-red-500 hover:bg-red-50'}`}
-                  >
-                    <Power size={16}/>
-                  </button>
-                  <button onClick={() => setEditingProduct(p)} className="p-1.5 sm:p-2 text-gray-400 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-all"><Edit2 size={16}/></button>
-                  <button onClick={() => confirm("Remover?") && deleteProductFromDb(p.id)} className="p-1.5 sm:p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><Trash2 size={16}/></button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'categories' && (
-        <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4 sm:space-y-6 animate-in fade-in duration-300">
-           <h2 className="font-black text-gray-900 flex items-center gap-2 text-base sm:text-lg">Categorias</h2>
-           <div className="flex gap-2">
-             <input 
-               className="flex-1 p-3 bg-gray-50 rounded-xl text-xs sm:text-sm border-transparent focus:border-orange-200 border outline-none" 
-               placeholder="Ex: Porções, Doces..." 
-               value={newCategoryName}
-               onChange={e => setNewCategoryName(e.target.value)}
-             />
-             <button onClick={addCategory} className="bg-gray-900 text-white px-4 sm:px-6 rounded-xl text-[10px] sm:text-xs font-bold">Add</button>
-           </div>
-           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-             {tempSettings.categories.map(cat => (
-               <div key={cat} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
-                  <span className="text-[10px] sm:text-xs font-bold text-gray-700">{cat}</span>
-                  <button onClick={() => removeCategory(cat)} className="text-red-400 hover:text-red-600 p-1"><X size={14}/></button>
-               </div>
-             ))}
-           </div>
-           <button onClick={() => handleSaveSettings()} className="w-full py-3 sm:py-4 bg-orange-500 text-white rounded-xl font-bold text-[10px] sm:text-xs shadow-lg shadow-orange-100">SALVAR CATEGORIAS</button>
-        </div>
-      )}
-
-      {activeTab === 'hours' && (
-        <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4 sm:space-y-6 animate-in fade-in duration-300">
-           <h2 className="font-black text-gray-900 flex items-center gap-2 text-base sm:text-lg">Horários Semanais</h2>
-           <div className="space-y-3">
-              {WEEK_DAYS.map((dayName, idx) => {
-                const hour = tempSettings.hours[idx];
-                return (
-                  <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-4 bg-gray-50 rounded-xl gap-2 sm:gap-0 border border-transparent hover:border-orange-100 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <input 
-                        type="checkbox" 
-                        checked={hour.enabled} 
-                        onChange={e => updateHour(idx, 'enabled', e.target.checked)}
-                        className="w-4 h-4 rounded text-orange-500 focus:ring-orange-500 cursor-pointer"
-                      />
-                      <span className="text-[10px] sm:text-xs font-bold w-20">{dayName}</span>
+      <div className="max-w-full overflow-hidden px-0.5">
+        {activeTab === 'menu' && (
+          <div className="space-y-3 animate-in fade-in duration-300">
+            <div className="flex justify-between items-center px-1">
+              <h2 className="font-black text-gray-900 flex items-center gap-1.5 text-xs sm:text-lg">Gerenciar Pratos</h2>
+              <button onClick={() => setEditingProduct({ available: true, category: tempSettings.categories[0] })} className="bg-orange-500 text-white px-2.5 sm:px-4 py-1.5 rounded-lg text-[9px] sm:text-xs font-bold shadow-md shadow-orange-50 hover:bg-orange-600">+ Novo</button>
+            </div>
+            <div className="grid gap-2">
+              {products.length === 0 && <div className="p-8 text-center bg-white rounded-xl border border-dashed border-gray-200 text-gray-400 text-[9px] sm:text-xs">Nenhum prato.</div>}
+              {products.map(p => (
+                <div key={p.id} className="bg-white p-2.5 sm:p-4 rounded-xl flex items-center justify-between border border-gray-100 shadow-sm">
+                  <div className="flex items-center gap-2.5 sm:gap-4 overflow-hidden">
+                    <img src={p.image} className="w-9 h-9 sm:w-12 sm:h-12 rounded-lg object-cover flex-shrink-0" alt={p.name} />
+                    <div className="overflow-hidden">
+                      <p className="font-bold text-[10px] sm:text-sm text-gray-900 truncate">{p.name}</p>
+                      <p className="text-[8px] sm:text-[10px] text-gray-400 uppercase font-black truncate">R$ {p.price.toFixed(2)}</p>
                     </div>
-                    {hour.enabled ? (
-                      <div className="flex items-center gap-2 justify-end">
-                        <input type="time" value={hour.open} onChange={e => updateHour(idx, 'open', e.target.value)} className="text-[10px] sm:text-[11px] p-1.5 sm:p-2 rounded bg-white border border-gray-200 text-gray-900 font-medium focus:ring-2 focus:ring-orange-100 outline-none" />
-                        <span className="text-gray-400 text-[10px]">até</span>
-                        <input type="time" value={hour.close} onChange={e => updateHour(idx, 'close', e.target.value)} className="text-[10px] sm:text-[11px] p-1.5 sm:p-2 rounded bg-white border border-gray-200 text-gray-900 font-medium focus:ring-2 focus:ring-orange-100 outline-none" />
-                      </div>
-                    ) : (
-                      <span className="text-[9px] sm:text-[10px] text-gray-400 font-bold uppercase text-right">Fechado</span>
-                    )}
                   </div>
-                )
-              })}
-           </div>
-           <button onClick={() => handleSaveSettings()} className="w-full py-3 sm:py-4 bg-orange-500 text-white rounded-xl font-bold text-[10px] sm:text-xs shadow-lg shadow-orange-100">SALVAR HORÁRIOS</button>
-        </div>
-      )}
-
-      {activeTab === 'settings' && (
-        <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-sm space-y-6 sm:space-y-8 animate-in fade-in duration-300 max-w-full overflow-hidden">
-          <h2 className="font-black text-gray-900 flex items-center gap-2 text-base sm:text-lg">Dados da Loja</h2>
-          
-          <div className="space-y-5">
-             <div className="flex flex-col items-center gap-4">
-                <div className="relative group">
-                   <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-gray-50 overflow-hidden border-2 border-dashed border-gray-200 flex items-center justify-center shadow-inner">
-                     {tempSettings.photoUrl ? <img src={tempSettings.photoUrl} className="w-full h-full object-cover" alt="Logo Loja" /> : <ImageIcon className="text-gray-300" size={32}/>}
-                   </div>
-                   <button onClick={() => fileInputLogoRef.current?.click()} className="absolute -bottom-2 -right-2 bg-orange-500 text-white p-2 rounded-xl shadow-lg hover:scale-110 transition-transform ring-4 ring-white"><Camera size={14}/></button>
-                   <input type="file" ref={fileInputLogoRef} hidden accept="image/*" onChange={handleLogoUpload} />
+                  <div className="flex gap-1 sm:gap-2 flex-shrink-0">
+                    <button onClick={() => saveProductToDb({...p, available: !p.available})} className={`p-1.5 rounded-lg ${p.available ? 'text-emerald-500 hover:bg-emerald-50' : 'text-red-500 hover:bg-red-50'}`}><Power size={14}/></button>
+                    <button onClick={() => setEditingProduct(p)} className="p-1.5 text-gray-400 hover:text-orange-500 hover:bg-orange-50 rounded-lg"><Edit2 size={14}/></button>
+                    <button onClick={() => confirm("Remover?") && deleteProductFromDb(p.id)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={14}/></button>
+                  </div>
                 </div>
-                <p className="text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-widest">Alterar Logo</p>
-             </div>
-
-             <label className="block space-y-2">
-               <span className="text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest">Nome do Estabelecimento</span>
-               <input className="w-full p-3 sm:p-4 bg-gray-50 rounded-xl text-xs sm:text-sm font-bold border-transparent focus:border-orange-200 border outline-none" value={tempSettings.name} onChange={e => setTempSettings({...tempSettings, name: e.target.value})} />
-             </label>
-
-             <button onClick={() => handleSaveSettings()} disabled={saving} className="w-full py-3 sm:py-4 bg-gray-900 text-white rounded-xl font-black text-[10px] sm:text-xs hover:bg-black transition-all disabled:opacity-50 shadow-xl shadow-gray-200">
-               {saving ? 'SALVANDO...' : 'ATUALIZAR CONFIGURAÇÕES'}
-             </button>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {activeTab === 'categories' && (
+          <div className="bg-white p-3 sm:p-6 rounded-xl border border-gray-100 shadow-sm space-y-4 animate-in fade-in duration-300">
+             <h2 className="font-black text-gray-900 text-xs sm:text-lg uppercase tracking-wider">Categorias</h2>
+             <div className="flex gap-1.5">
+               <input 
+                 className="flex-1 p-2.5 bg-gray-50 rounded-lg text-[10px] sm:text-sm border-transparent focus:border-orange-200 border outline-none" 
+                 placeholder="Ex: Marmitas..." 
+                 value={newCategoryName}
+                 onChange={e => setNewCategoryName(e.target.value)}
+               />
+               <button onClick={addCategory} className="bg-gray-900 text-white px-3 sm:px-6 rounded-lg text-[9px] sm:text-xs font-bold">Add</button>
+             </div>
+             <div className="grid grid-cols-1 gap-2">
+               {tempSettings.categories.map(cat => (
+                 <div key={cat} className="flex items-center justify-between p-2.5 bg-gray-50 rounded-lg border border-gray-100">
+                    <span className="text-[9px] sm:text-xs font-bold text-gray-700">{cat}</span>
+                    <button onClick={() => removeCategory(cat)} className="text-red-400 p-1"><X size={12}/></button>
+                 </div>
+               ))}
+             </div>
+             <button onClick={() => handleSaveSettings()} className="w-full py-2.5 sm:py-4 bg-orange-500 text-white rounded-lg sm:rounded-xl font-bold text-[9px] sm:text-xs shadow-md shadow-orange-50">SALVAR CATEGORIAS</button>
+          </div>
+        )}
+
+        {activeTab === 'hours' && (
+          <div className="bg-white p-3 sm:p-6 rounded-xl border border-gray-100 shadow-sm space-y-4 animate-in fade-in duration-300">
+             <h2 className="font-black text-gray-900 text-xs sm:text-lg uppercase tracking-wider">Funcionamento Automático</h2>
+             <div className="space-y-2.5">
+                {WEEK_DAYS.map((dayName, idx) => {
+                  const hour = tempSettings.hours[idx];
+                  return (
+                    <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 sm:p-4 bg-gray-50 rounded-lg gap-2 border border-transparent hover:border-orange-100">
+                      <div className="flex items-center gap-2">
+                        <input type="checkbox" checked={hour.enabled} onChange={e => updateHour(idx, 'enabled', e.target.checked)} className="w-3.5 h-3.5 rounded text-orange-500" />
+                        <span className="text-[9px] sm:text-xs font-bold w-16">{dayName}</span>
+                      </div>
+                      {hour.enabled ? (
+                        <div className="flex items-center gap-1.5 justify-end">
+                          <input type="time" value={hour.open} onChange={e => updateHour(idx, 'open', e.target.value)} className="text-[10px] p-1.5 rounded bg-white border border-gray-200 text-black font-bold outline-none ring-offset-0 focus:ring-1 focus:ring-orange-300" />
+                          <span className="text-gray-400 text-[8px]">até</span>
+                          <input type="time" value={hour.close} onChange={e => updateHour(idx, 'close', e.target.value)} className="text-[10px] p-1.5 rounded bg-white border border-gray-200 text-black font-bold outline-none ring-offset-0 focus:ring-1 focus:ring-orange-300" />
+                        </div>
+                      ) : (
+                        <span className="text-[8px] sm:text-[9px] text-gray-400 font-bold uppercase text-right">Fechado</span>
+                      )}
+                    </div>
+                  )
+                })}
+             </div>
+             <button onClick={() => handleSaveSettings()} className="w-full py-2.5 sm:py-4 bg-orange-500 text-white rounded-lg sm:rounded-xl font-bold text-[9px] sm:text-xs">SALVAR ESCALA SEMANAL</button>
+          </div>
+        )}
+
+        {activeTab === 'settings' && (
+          <div className="bg-white p-3 sm:p-6 rounded-xl border border-gray-100 shadow-sm space-y-5 animate-in fade-in duration-300">
+            <h2 className="font-black text-gray-900 text-xs sm:text-lg uppercase tracking-wider">Configuração Visual</h2>
+            
+            <div className="space-y-4">
+               <div className="flex flex-col items-center gap-2">
+                  <div className="relative group">
+                     <div className="w-16 h-16 sm:w-24 sm:h-24 rounded-xl bg-gray-50 overflow-hidden border-2 border-dashed border-gray-200 flex items-center justify-center">
+                       {tempSettings.photoUrl ? <img src={tempSettings.photoUrl} className="w-full h-full object-cover" /> : <ImageIcon className="text-gray-300" size={24}/>}
+                     </div>
+                     <button onClick={() => fileInputLogoRef.current?.click()} className="absolute -bottom-1 -right-1 bg-orange-500 text-white p-1.5 rounded-lg shadow-md"><Camera size={12}/></button>
+                     <input type="file" ref={fileInputLogoRef} hidden accept="image/*" onChange={handleLogoUpload} />
+                  </div>
+                  <p className="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase tracking-widest">Logo da Loja</p>
+               </div>
+
+               <label className="block space-y-1.5">
+                 <span className="text-[8px] sm:text-[9px] font-black text-gray-400 uppercase tracking-widest">Nome do Estabelecimento</span>
+                 <input className="w-full p-2.5 sm:p-4 bg-gray-50 rounded-lg sm:rounded-xl text-[10px] sm:text-sm font-bold border-transparent focus:border-orange-200 border outline-none" value={tempSettings.name} onChange={e => setTempSettings({...tempSettings, name: e.target.value})} />
+               </label>
+
+               <button onClick={() => handleSaveSettings()} disabled={saving} className="w-full py-2.5 sm:py-4 bg-gray-900 text-white rounded-lg sm:rounded-xl font-black text-[9px] sm:text-xs uppercase shadow-lg shadow-gray-100">
+                 {saving ? '...' : 'Salvar Dados'}
+               </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {editingProduct && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-lg p-5 sm:p-8 rounded-3xl space-y-4 sm:space-y-6 shadow-2xl relative max-h-[95vh] flex flex-col overflow-hidden">
-             <button onClick={() => setEditingProduct(null)} className="absolute top-3 right-3 p-2 hover:bg-gray-100 rounded-full transition-colors"><X size={20}/></button>
-             <h3 className="font-black text-lg sm:text-xl text-gray-900">{editingProduct.id ? 'Editar' : 'Novo'} Prato</h3>
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-lg p-4 sm:p-8 rounded-2xl sm:rounded-3xl space-y-4 shadow-2xl relative max-h-[92vh] flex flex-col overflow-hidden">
+             <button onClick={() => setEditingProduct(null)} className="absolute top-2 right-2 p-2 hover:bg-gray-100 rounded-full"><X size={18}/></button>
+             <h3 className="font-black text-sm sm:text-xl text-gray-900 uppercase pr-8">{editingProduct.id ? 'Editar' : 'Novo'} Item</h3>
              
-             <div className="flex-1 overflow-y-auto no-scrollbar pr-1 space-y-4 pb-4">
+             <div className="flex-1 overflow-y-auto no-scrollbar space-y-4 pb-2 pr-1">
                 <div className="flex justify-center">
-                   <div className="relative group cursor-pointer" onClick={() => fileInputProdRef.current?.click()}>
-                     <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-2xl bg-gray-50 overflow-hidden border-2 border-dashed border-gray-200 flex items-center justify-center shadow-inner">
-                        {editingProduct.image ? <img src={editingProduct.image} className="w-full h-full object-cover" alt="Prato" /> : <ImageIcon className="text-gray-300" size={32}/>}
+                   <div className="relative cursor-pointer" onClick={() => fileInputProdRef.current?.click()}>
+                     <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-xl bg-gray-50 overflow-hidden border-2 border-dashed border-gray-200 flex items-center justify-center">
+                        {editingProduct.image ? <img src={editingProduct.image} className="w-full h-full object-cover" /> : <ImageIcon className="text-gray-300" size={28}/>}
                      </div>
-                     <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity rounded-2xl"><Upload size={24}/></div>
+                     <div className="absolute inset-0 bg-black/5 flex items-center justify-center opacity-0 hover:opacity-100 rounded-xl transition-opacity"><Upload size={20} className="text-white" /></div>
                      <input type="file" ref={fileInputProdRef} hidden accept="image/*" onChange={async e => {
                        const file = e.target.files?.[0];
                        if (file) {
@@ -627,45 +634,39 @@ function AdminDashboard({ products, settings, isAdmin }: { products: Product[], 
                    </div>
                 </div>
 
-                <div className="space-y-3 sm:space-y-4">
+                <div className="space-y-3">
                   <label className="block space-y-1">
-                    <span className="text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase">Nome do Prato</span>
-                    <input className="w-full p-3 sm:p-4 bg-gray-50 rounded-xl text-xs sm:text-sm border-transparent focus:border-orange-200 border outline-none" placeholder="Ex: Batata com Bacon" value={editingProduct.name || ''} onChange={e => setEditingProduct({...editingProduct, name: e.target.value})} />
+                    <span className="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase">Nome</span>
+                    <input className="w-full p-2.5 sm:p-4 bg-gray-50 rounded-lg text-[10px] sm:text-sm border-transparent focus:border-orange-200 border outline-none" placeholder="Ex: Batata Cheddar" value={editingProduct.name || ''} onChange={e => setEditingProduct({...editingProduct, name: e.target.value})} />
                   </label>
                   
-                  <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                  <div className="grid grid-cols-2 gap-2 sm:gap-4">
                     <label className="block space-y-1">
-                      <span className="text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase">Preço (R$)</span>
-                      <input className="w-full p-3 sm:p-4 bg-gray-50 rounded-xl text-xs sm:text-sm border-transparent focus:border-orange-200 border outline-none font-bold text-orange-600" placeholder="0.00" type="number" step="0.10" value={editingProduct.price || 0} onChange={e => setEditingProduct({...editingProduct, price: parseFloat(e.target.value)})} />
+                      <span className="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase">Preço (R$)</span>
+                      <input className="w-full p-2.5 sm:p-4 bg-gray-50 rounded-lg text-[10px] sm:text-sm border-transparent focus:border-orange-200 border outline-none font-bold text-orange-600" placeholder="0.00" type="number" step="0.10" value={editingProduct.price || 0} onChange={e => setEditingProduct({...editingProduct, price: parseFloat(e.target.value)})} />
                     </label>
                     <label className="block space-y-1">
-                      <span className="text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase">Categoria</span>
-                      <select className="w-full p-3 sm:p-4 bg-gray-50 rounded-xl text-xs sm:text-sm border-transparent focus:border-orange-200 border outline-none appearance-none font-medium" value={editingProduct.category || tempSettings.categories[0]} onChange={e => setEditingProduct({...editingProduct, category: e.target.value})}>
+                      <span className="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase">Categoria</span>
+                      <select className="w-full p-2.5 sm:p-4 bg-gray-50 rounded-lg text-[10px] sm:text-sm border-transparent focus:border-orange-200 border outline-none appearance-none font-medium" value={editingProduct.category || tempSettings.categories[0]} onChange={e => setEditingProduct({...editingProduct, category: e.target.value})}>
                         {tempSettings.categories.map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
                     </label>
                   </div>
 
                   <label className="block space-y-1">
-                    <span className="text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase">Descrição</span>
-                    <textarea className="w-full p-3 sm:p-4 bg-gray-50 rounded-xl text-xs sm:text-sm h-16 sm:h-20 border-transparent focus:border-orange-200 border outline-none resize-none leading-relaxed" placeholder="Ingredientes e detalhes..." value={editingProduct.description || ''} onChange={e => setEditingProduct({...editingProduct, description: e.target.value})} />
+                    <span className="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase">Descrição</span>
+                    <textarea className="w-full p-2.5 sm:p-4 bg-gray-50 rounded-lg text-[10px] sm:text-sm h-14 sm:h-20 border-transparent focus:border-orange-200 border outline-none resize-none leading-relaxed" placeholder="Detalhes do prato..." value={editingProduct.description || ''} onChange={e => setEditingProduct({...editingProduct, description: e.target.value})} />
                   </label>
 
-                  <div className="flex items-center gap-3 bg-gray-50 p-3 sm:p-4 rounded-xl border border-gray-100">
-                    <input 
-                      type="checkbox" 
-                      id="available"
-                      checked={editingProduct.available !== false} 
-                      onChange={e => setEditingProduct({...editingProduct, available: e.target.checked})}
-                      className="w-5 h-5 rounded text-orange-500 focus:ring-orange-500 cursor-pointer"
-                    />
-                    <label htmlFor="available" className="text-[10px] sm:text-xs font-bold text-gray-700 cursor-pointer">Disponível para venda agora?</label>
+                  <div className="flex items-center gap-2.5 bg-gray-50 p-2.5 sm:p-4 rounded-lg">
+                    <input type="checkbox" id="avail-adm" checked={editingProduct.available !== false} onChange={e => setEditingProduct({...editingProduct, available: e.target.checked})} className="w-4 h-4 rounded text-orange-500" />
+                    <label htmlFor="avail-adm" className="text-[9px] sm:text-xs font-bold text-gray-700 cursor-pointer">Disponível para venda?</label>
                   </div>
                 </div>
              </div>
-             <div className="flex gap-2 sm:gap-3 pt-3 sm:pt-4 border-t mt-auto">
-                <button onClick={() => setEditingProduct(null)} className="flex-1 py-3 sm:py-4 font-black text-gray-400 text-[10px] sm:text-xs uppercase hover:bg-gray-50 rounded-xl transition-colors">Sair</button>
-                <button onClick={handleSaveProduct} disabled={saving} className="flex-[2] py-3 sm:py-4 bg-orange-500 text-white rounded-xl font-black text-[10px] sm:text-xs uppercase shadow-lg shadow-orange-100 hover:bg-orange-600 transition-all">
+             <div className="flex gap-2 sm:gap-3 pt-3 border-t mt-auto">
+                <button onClick={() => setEditingProduct(null)} className="flex-1 py-2.5 sm:py-4 font-black text-gray-400 text-[9px] sm:text-xs uppercase hover:bg-gray-50 rounded-lg">Sair</button>
+                <button onClick={handleSaveProduct} disabled={saving} className="flex-[2] py-2.5 sm:py-4 bg-orange-500 text-white rounded-lg sm:rounded-xl font-black text-[9px] sm:text-xs uppercase shadow-md shadow-orange-50">
                   {saving ? '...' : 'Salvar Alterações'}
                 </button>
              </div>
