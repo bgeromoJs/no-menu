@@ -24,10 +24,9 @@ import {
   Camera,
   Database,
   ArrowRight,
-  Wifi,
-  WifiOff,
   Phone,
-  AlertTriangle
+  AlertTriangle,
+  CheckCircle2
 } from 'lucide-react';
 import { Product, CartItem, ViewMode, BusinessSettings } from './types';
 import { ADMIN_PHONE, WEEK_DAYS, DEFAULT_SETTINGS } from './constants';
@@ -475,6 +474,8 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
   const [tempSettings, setTempSettings] = useState<BusinessSettings>(settings);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState<{msg: string, type: 'success' | 'error'} | null>(null);
+  
   const fileInputLogoRef = useRef<HTMLInputElement>(null);
   const fileInputProdRef = useRef<HTMLInputElement>(null);
 
@@ -482,33 +483,52 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
     setTempSettings(settings);
   }, [settings]);
 
+  const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
   const handleSaveProduct = async () => {
     if (!editingProduct) return;
-    setSaving(true);
-    await saveProductToDb({
-      id: editingProduct.id || `p-${Date.now()}`,
-      name: editingProduct.name || 'Sem nome',
-      description: editingProduct.description || '',
-      price: editingProduct.price || 0,
-      category: editingProduct.category || tempSettings.categories[0],
-      image: editingProduct.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=400',
-      available: editingProduct.available !== undefined ? editingProduct.available : true
-    });
-    setSaving(false);
-    setEditingProduct(null);
+    try {
+      setSaving(true);
+      await saveProductToDb({
+        id: editingProduct.id || `p-${Date.now()}`,
+        name: editingProduct.name || 'Sem nome',
+        description: editingProduct.description || '',
+        price: editingProduct.price || 0,
+        category: editingProduct.category || tempSettings.categories[0],
+        image: editingProduct.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=400',
+        available: editingProduct.available !== undefined ? editingProduct.available : true
+      });
+      showToast("Prato salvo com sucesso!");
+      setEditingProduct(null);
+    } catch (e) {
+      showToast("Erro ao salvar prato.", "error");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleSaveSettings = async (specificSettings?: BusinessSettings) => {
-    setSaving(true);
-    await saveSettings(specificSettings || tempSettings);
-    setSaving(false);
+    try {
+      setSaving(true);
+      await saveSettings(specificSettings || tempSettings);
+      showToast("Configurações atualizadas!");
+    } catch (e) {
+      showToast("Erro ao atualizar.", "error");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const b64 = await fileToBase64(file);
-      setTempSettings({...tempSettings, photoUrl: b64});
+      const newSettings = {...tempSettings, photoUrl: b64};
+      setTempSettings(newSettings);
+      await handleSaveSettings(newSettings);
     }
   };
 
@@ -546,26 +566,43 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
   };
 
   const handleSeed = async () => {
-    setSaving(true);
-    await seedDatabase();
-    setSaving(false);
-    alert("Dados iniciais carregados!");
+    try {
+      setSaving(true);
+      await seedDatabase();
+      showToast("Dados iniciais carregados!");
+    } catch (e) {
+      showToast("Erro ao carregar iniciais.", "error");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const confirmDelete = async () => {
     if (deleteTargetId) {
-      await deleteProductFromDb(deleteTargetId);
-      setDeleteTargetId(null);
+      try {
+        setSaving(true);
+        await deleteProductFromDb(deleteTargetId);
+        showToast("Item removido!");
+        setDeleteTargetId(null);
+      } catch (e) {
+        showToast("Erro ao remover.", "error");
+      } finally {
+        setSaving(false);
+      }
     }
   };
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      <div className="flex justify-end -mb-2">
-         <div className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[8px] font-bold uppercase tracking-wider border ${isMockMode ? 'bg-orange-50 text-orange-600 border-orange-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>
-            {isMockMode ? <><WifiOff size={10}/> Modo Offline</> : <><Wifi size={10}/> Firebase Online</>}
-         </div>
-      </div>
+    <div className="space-y-4 sm:space-y-6 relative pb-10">
+      {/* Toast Feedback */}
+      {toast && (
+        <div className="fixed top-20 right-4 z-[500] animate-in slide-in-from-right fade-in duration-300">
+           <div className={`flex items-center gap-2 px-4 py-3 rounded-xl shadow-2xl border ${toast.type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-red-50 border-red-100 text-red-800'}`}>
+              {toast.type === 'success' ? <CheckCircle2 size={18}/> : <AlertTriangle size={18}/>}
+              <span className="text-xs sm:text-sm font-bold">{toast.msg}</span>
+           </div>
+        </div>
+      )}
 
       <div className="animate-in fade-in slide-in-from-top-4 duration-700">
         <div className="bg-white rounded-2xl p-4 sm:p-5 border border-gray-100 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -583,9 +620,10 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
            
            <button 
               onClick={toggleManualStatus} 
-              className={`w-full sm:w-auto px-6 py-3 rounded-xl font-bold text-[10px] sm:text-xs transition-all flex items-center justify-center gap-2 group ${tempSettings.manualClosed ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100 hover:bg-emerald-600' : 'bg-red-500 text-white shadow-lg shadow-red-100 hover:bg-red-600'}`}
+              disabled={saving}
+              className={`w-full sm:w-auto px-6 py-3 rounded-xl font-bold text-[10px] sm:text-xs transition-all flex items-center justify-center gap-2 group disabled:opacity-50 ${tempSettings.manualClosed ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100 hover:bg-emerald-600' : 'bg-red-500 text-white shadow-lg shadow-red-100 hover:bg-red-600'}`}
            >
-             <Power size={14} className="group-hover:rotate-12 transition-transform" />
+             {saving ? <RefreshCw className="animate-spin" size={14}/> : <Power size={14} className="group-hover:rotate-12 transition-transform" />}
              {tempSettings.manualClosed ? 'REATIVAR LOJA AGORA' : 'DESATIVAR LOJA MANUAL'}
            </button>
         </div>
@@ -614,7 +652,7 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
             <div className="flex justify-between items-center px-1">
               <h2 className="font-black text-gray-900 flex items-center gap-1.5 text-xs sm:text-lg">Gerenciar Cardápio</h2>
               <div className="flex gap-2">
-                 <button onClick={handleSeed} className="text-gray-400 hover:text-blue-500 p-2"><Database size={16} /></button>
+                 <button onClick={handleSeed} disabled={saving} className="text-gray-400 hover:text-blue-500 p-2 disabled:opacity-50"><Database size={16} /></button>
                  <button onClick={() => setEditingProduct({ available: true, category: tempSettings.categories[0] })} className="bg-orange-500 text-white px-2.5 sm:px-4 py-1.5 rounded-lg text-[9px] sm:text-xs font-bold shadow-md shadow-orange-50 hover:bg-orange-600">+ Novo Item</button>
               </div>
             </div>
@@ -667,7 +705,9 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
                  </div>
                ))}
              </div>
-             <button onClick={() => handleSaveSettings()} className="w-full py-3 bg-orange-500 text-white rounded-lg font-bold text-[10px] sm:text-xs">SALVAR CATEGORIAS</button>
+             <button onClick={() => handleSaveSettings()} disabled={saving} className="w-full py-3 bg-orange-500 text-white rounded-lg font-bold text-[10px] sm:text-xs disabled:opacity-50">
+                {saving ? <RefreshCw className="animate-spin mx-auto" size={16}/> : 'SALVAR CATEGORIAS'}
+             </button>
           </div>
         )}
 
@@ -678,55 +718,61 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
                 {WEEK_DAYS.map((dayName, idx) => {
                   const hour = tempSettings.hours[idx];
                   return (
-                    <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 sm:p-4 bg-gray-50 rounded-lg gap-2">
-                      <div className="flex items-center gap-2">
-                        <input type="checkbox" checked={hour.enabled} onChange={e => updateHour(idx, 'enabled', e.target.checked)} className="w-3.5 h-3.5 rounded text-orange-500" />
-                        <span className="text-[9px] sm:text-xs font-bold w-16">{dayName}</span>
+                    <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 sm:p-4 bg-gray-50 rounded-lg gap-3">
+                      <div className="flex items-center gap-3">
+                        <input type="checkbox" checked={hour.enabled} onChange={e => updateHour(idx, 'enabled', e.target.checked)} className="w-4 h-4 rounded text-orange-500" />
+                        <span className="text-[10px] sm:text-xs font-bold w-28 whitespace-nowrap">{dayName}</span>
                       </div>
-                      {hour.enabled && (
-                        <div className="flex items-center gap-1.5 justify-end">
-                          <input type="time" value={hour.open} onChange={e => updateHour(idx, 'open', e.target.value)} className="text-[10px] p-1.5 rounded bg-white border outline-none" />
-                          <input type="time" value={hour.close} onChange={e => updateHour(idx, 'close', e.target.value)} className="text-[10px] p-1.5 rounded bg-white border outline-none" />
+                      {hour.enabled ? (
+                        <div className="flex items-center gap-2 justify-end flex-1">
+                          <input type="time" value={hour.open} onChange={e => updateHour(idx, 'open', e.target.value)} className="text-[10px] sm:text-xs p-1.5 sm:p-2 rounded-lg bg-white border border-gray-200 outline-none w-24 sm:w-28 text-center font-bold" />
+                          <span className="text-gray-400 text-[10px]">às</span>
+                          <input type="time" value={hour.close} onChange={e => updateHour(idx, 'close', e.target.value)} className="text-[10px] sm:text-xs p-1.5 sm:p-2 rounded-lg bg-white border border-gray-200 outline-none w-24 sm:w-28 text-center font-bold" />
                         </div>
+                      ) : (
+                        <span className="text-[9px] sm:text-xs font-bold text-gray-300 uppercase italic">Fechado</span>
                       )}
                     </div>
                   )
                 })}
              </div>
-             <button onClick={() => handleSaveSettings()} className="w-full py-2.5 sm:py-4 bg-orange-500 text-white rounded-lg font-bold text-[9px] sm:text-xs">SALVAR HORÁRIOS</button>
+             <button onClick={() => handleSaveSettings()} disabled={saving} className="w-full py-3 sm:py-4 bg-orange-500 text-white rounded-xl font-bold text-[10px] sm:text-sm disabled:opacity-50 shadow-lg shadow-orange-50">
+               {saving ? <RefreshCw className="animate-spin mx-auto" size={18}/> : 'SALVAR ESCALA DE HORÁRIOS'}
+             </button>
           </div>
         )}
 
         {activeTab === 'settings' && (
           <div className="bg-white p-3 sm:p-6 rounded-xl border border-gray-100 shadow-sm space-y-5 animate-in fade-in duration-300">
-            <h2 className="font-black text-gray-900 text-xs sm:text-lg uppercase tracking-wider">Configurações</h2>
+            <h2 className="font-black text-gray-900 text-xs sm:text-lg uppercase tracking-wider">Dados do Estabelecimento</h2>
             
             <div className="space-y-4">
                <div className="flex flex-col items-center gap-2">
-                  <div className="relative group" onClick={() => fileInputLogoRef.current?.click()}>
-                     <div className="w-16 h-16 sm:w-24 sm:h-24 rounded-xl bg-gray-50 overflow-hidden border-2 border-dashed border-gray-200 flex items-center justify-center">
-                       {tempSettings.photoUrl ? <img src={tempSettings.photoUrl} className="w-full h-full object-cover" /> : <ImageIcon className="text-gray-300" size={24}/>}
+                  <div className="relative group cursor-pointer" onClick={() => fileInputLogoRef.current?.click()}>
+                     <div className="w-20 h-20 sm:w-28 sm:h-28 rounded-2xl bg-gray-50 overflow-hidden border-2 border-dashed border-gray-200 flex items-center justify-center">
+                       {tempSettings.photoUrl ? <img src={tempSettings.photoUrl} className="w-full h-full object-cover" /> : <ImageIcon className="text-gray-300" size={32}/>}
                      </div>
-                     <button className="absolute -bottom-1 -right-1 bg-orange-500 text-white p-1.5 rounded-lg"><Camera size={12}/></button>
+                     <button className="absolute -bottom-1 -right-1 bg-orange-500 text-white p-2 rounded-lg shadow-md"><Camera size={14}/></button>
                      <input type="file" ref={fileInputLogoRef} hidden accept="image/*" onChange={handleLogoUpload} />
                   </div>
+                  <p className="text-[8px] font-bold text-gray-400 uppercase">Logo da Loja</p>
                </div>
 
                <label className="block space-y-1.5">
                  <span className="text-[8px] sm:text-[9px] font-black text-gray-400 uppercase tracking-widest">Nome da Loja</span>
-                 <input className="w-full p-2.5 sm:p-4 bg-gray-50 rounded-lg text-[10px] sm:text-sm font-bold border-transparent focus:border-orange-200 border outline-none" value={tempSettings.name} onChange={e => setTempSettings({...tempSettings, name: e.target.value})} />
+                 <input className="w-full p-3 sm:p-4 bg-gray-50 rounded-xl text-[11px] sm:text-sm font-bold border-transparent focus:border-orange-200 border outline-none" value={tempSettings.name} onChange={e => setTempSettings({...tempSettings, name: e.target.value})} />
                </label>
 
                <label className="block space-y-1.5">
-                 <span className="text-[8px] sm:text-[9px] font-black text-gray-400 uppercase tracking-widest">Telefone de Pedidos (DDI + DDD + Numero)</span>
+                 <span className="text-[8px] sm:text-[9px] font-black text-gray-400 uppercase tracking-widest">WhatsApp para Pedidos</span>
                  <div className="relative">
-                   <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                   <input className="w-full p-2.5 sm:p-4 pl-10 bg-gray-50 rounded-lg text-[10px] sm:text-sm font-bold border-transparent focus:border-orange-200 border outline-none" placeholder="Ex: 5511999999999" value={tempSettings.whatsappPhone} onChange={e => setTempSettings({...tempSettings, whatsappPhone: e.target.value})} />
+                   <Phone size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                   <input className="w-full p-3 sm:p-4 pl-10 bg-gray-50 rounded-xl text-[11px] sm:text-sm font-bold border-transparent focus:border-orange-200 border outline-none" placeholder="Ex: 5511999999999" value={tempSettings.whatsappPhone} onChange={e => setTempSettings({...tempSettings, whatsappPhone: e.target.value})} />
                  </div>
                </label>
 
-               <button onClick={() => handleSaveSettings()} disabled={saving} className="w-full py-2.5 sm:py-4 bg-gray-900 text-white rounded-lg font-black text-[9px] sm:text-xs uppercase shadow-lg disabled:opacity-50">
-                 {saving ? 'Gravando...' : 'Salvar Dados'}
+               <button onClick={() => handleSaveSettings()} disabled={saving} className="w-full py-3 sm:py-4 bg-gray-900 text-white rounded-xl font-black text-[10px] sm:text-xs uppercase shadow-lg disabled:opacity-50">
+                 {saving ? <RefreshCw className="animate-spin mx-auto" size={18}/> : 'GRAVAR TODAS AS ALTERAÇÕES'}
                </button>
             </div>
           </div>
@@ -742,11 +788,13 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
               </div>
               <div>
                 <h3 className="text-lg font-black text-gray-900">Excluir Item?</h3>
-                <p className="text-sm text-gray-500 leading-relaxed mt-2">Esta ação não pode ser desfeita. O prato será removido permanentemente do cardápio.</p>
+                <p className="text-sm text-gray-500 leading-relaxed mt-2">O prato será removido permanentemente do cardápio online.</p>
               </div>
               <div className="flex gap-3">
                  <button onClick={() => setDeleteTargetId(null)} className="flex-1 py-3.5 bg-gray-50 text-gray-500 font-bold rounded-xl hover:bg-gray-100 transition-colors">Cancelar</button>
-                 <button onClick={confirmDelete} className="flex-1 py-3.5 bg-red-500 text-white font-bold rounded-xl hover:bg-red-600 shadow-lg shadow-red-100 transition-all">Excluir Agora</button>
+                 <button onClick={confirmDelete} disabled={saving} className="flex-1 py-3.5 bg-red-500 text-white font-bold rounded-xl hover:bg-red-600 shadow-lg shadow-red-100 transition-all flex items-center justify-center">
+                   {saving ? <RefreshCw className="animate-spin" size={18}/> : 'Excluir Agora'}
+                 </button>
               </div>
            </div>
         </div>
@@ -777,7 +825,7 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
                 <div className="space-y-3">
                   <label className="block space-y-1">
                     <span className="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase">Nome do Prato</span>
-                    <input className="w-full p-2.5 sm:p-4 bg-gray-50 rounded-lg text-[10px] sm:text-sm border-transparent focus:border-orange-200 border outline-none" placeholder="Ex: Batata Recheada à Moda" value={editingProduct.name || ''} onChange={e => setEditingProduct({...editingProduct, name: e.target.value})} />
+                    <input className="w-full p-2.5 sm:p-4 bg-gray-50 rounded-lg text-[10px] sm:text-sm border-transparent focus:border-orange-200 border outline-none" placeholder="Ex: Marmita de Carne Assada" value={editingProduct.name || ''} onChange={e => setEditingProduct({...editingProduct, name: e.target.value})} />
                   </label>
                   
                   <div className="grid grid-cols-2 gap-2 sm:gap-4">
@@ -807,7 +855,7 @@ function AdminDashboard({ products, settings }: { products: Product[], settings:
              <div className="flex gap-2 sm:gap-3 pt-3 border-t mt-auto">
                 <button onClick={() => setEditingProduct(null)} className="flex-1 py-2.5 sm:py-4 font-black text-gray-400 text-[9px] sm:text-xs uppercase hover:bg-gray-50 rounded-lg">Cancelar</button>
                 <button onClick={handleSaveProduct} disabled={saving} className="flex-[2] py-2.5 sm:py-4 bg-orange-500 text-white rounded-lg sm:rounded-xl font-black text-[9px] sm:text-xs uppercase shadow-md shadow-orange-50 disabled:opacity-50 flex items-center justify-center gap-2">
-                  {saving ? '...' : <><Database size={14}/> Gravar Item</>}
+                  {saving ? <RefreshCw className="animate-spin" size={14}/> : <><Database size={14}/> Gravar Item</>}
                 </button>
              </div>
           </div>
